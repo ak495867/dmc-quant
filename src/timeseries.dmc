@@ -220,3 +220,91 @@ fn ts_correlation(x: *float, y: *float, count: int) -> float {
     }
     return corr;
 }
+
+fn ts_simd_dot(a: *float, b: *float, count: int) -> float {
+    var dot: float = 0.0;
+    c_code {
+        if (a && b && count > 0) {
+            double sum = 0.0;
+            for (int i = 0; i < count; i = i + 1) {
+                sum = sum + a[i] * b[i];
+            }
+            dot = (float)sum;
+        }
+    }
+    return dot;
+}
+
+fn ts_simd_sum(arr: *float, count: int) -> float {
+    var total: float = 0.0;
+    c_code {
+        if (arr && count > 0) {
+            double sum = 0.0;
+            for (int i = 0; i < count; i = i + 1) {
+                sum = sum + arr[i];
+            }
+            total = (float)sum;
+        }
+    }
+    return total;
+}
+
+fn ts_ewma_volatility(returns: *float, count: int, lambda_decay: float) -> float {
+    var vol: float = 0.0;
+    c_code {
+        if (returns && count > 1 && lambda_decay > 0.0 && lambda_decay < 1.0) {
+            double var_est = returns[0] * returns[0];
+            for (int i = 1; i < count; i = i + 1) {
+                var_est = lambda_decay * var_est + (1.0 - lambda_decay) * (returns[i] * returns[i]);
+            }
+            vol = (float)sqrt(var_est);
+        }
+    }
+    return vol;
+}
+
+fn ts_autocorrelation(series: *float, count: int, lag: int) -> float {
+    var ac: float = 0.0;
+    c_code {
+        if (series && count > lag && lag > 0) {
+            double sum = 0.0;
+            for (int i = 0; i < count; i = i + 1) sum = sum + series[i];
+            double mean = sum / count;
+            double num = 0.0;
+            double den = 0.0;
+            for (int i = 0; i < count; i = i + 1) {
+                double diff = series[i] - mean;
+                den = den + diff * diff;
+            }
+            for (int i = 0; i < (count - lag); i = i + 1) {
+                num = num + (series[i] - mean) * (series[i + lag] - mean);
+            }
+            if (den > 1e-9) {
+                ac = (float)(num / den);
+            }
+        }
+    }
+    return ac;
+}
+
+fn ts_rolling_zscore(prices: *float, count: int, period: int) -> float {
+    var z: float = 0.0;
+    c_code {
+        if (prices && count >= period && period > 1) {
+            int start = count - period;
+            double sum = 0.0;
+            for (int i = start; i < count; i = i + 1) sum = sum + prices[i];
+            double mean = sum / period;
+            double sum_sq = 0.0;
+            for (int i = start; i < count; i = i + 1) {
+                double diff = prices[i] - mean;
+                sum_sq = sum_sq + diff * diff;
+            }
+            double std_dev = sqrt(sum_sq / (period - 1));
+            if (std_dev > 1e-9) {
+                z = (float)((prices[count - 1] - mean) / std_dev);
+            }
+        }
+    }
+    return z;
+}

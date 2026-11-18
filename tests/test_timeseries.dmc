@@ -48,3 +48,32 @@ fn test_volatility_and_correlation() -> int {
     }
     return 0;
 }
+
+#[test]
+fn test_simd_reductions_and_ewma() -> int {
+    var a: [float; 4] = [1.0, 2.0, 3.0, 4.0];
+    var b: [float; 4] = [2.0, 2.0, 2.0, 2.0];
+    let dot: float = ts_simd_dot(&a[0], &b[0], 4);
+    if (dot < 19.9 || dot > 20.1) {
+        return 1;
+    }
+    let sum: float = ts_simd_sum(&a[0], 4);
+    if (sum < 9.9 || sum > 10.1) {
+        return 2;
+    }
+    let rets: [float; 5] = [0.01, -0.02, 0.015, -0.01, 0.02];
+    let ewma_vol: float = ts_ewma_volatility(&rets[0], 5, 0.94);
+    if (ewma_vol < 0.010 || ewma_vol > 0.025) {
+        return 3;
+    }
+    let ac: float = ts_autocorrelation(&rets[0], 5, 1);
+    if (ac < -1.01 || ac > 1.01) {
+        return 4;
+    }
+    var prices: [float; 5] = [10.0, 10.0, 10.0, 10.0, 13.0];
+    let z: float = ts_rolling_zscore(&prices[0], 5, 5);
+    if (z < 1.0 || z > 3.0) {
+        return 5;
+    }
+    return 0;
+}

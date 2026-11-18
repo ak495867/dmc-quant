@@ -14,6 +14,10 @@ fn test_black_scholes_call_and_put() -> int {
     if (parity_diff < -0.2 || parity_diff > 0.2) {
         return 3;
     }
+    let cnd_zero: float = bs_fast_cnd(0.0);
+    if (cnd_zero < 0.499 || cnd_zero > 0.501) {
+        return 4;
+    }
     return 0;
 }
 
@@ -49,11 +53,15 @@ fn test_implied_vol_and_monte_carlo() -> int {
     if (mc_px < 9.5 || mc_px > 11.5) {
         return 2;
     }
+    let mc_fast: float = bs_monte_carlo_fast(100.0, 100.0, 1.0, 0.05, 0.20, 10000, 1);
+    if (mc_fast < 9.5 || mc_fast > 11.5) {
+        return 3;
+    }
     return 0;
 }
 
 #[test]
-fn test_simd_option_payoff() -> int {
+fn test_simd_option_payoff_and_batch() -> int {
     let payoffs: f32x8 = bs_simd_call_payoff8(90.0, 95.0, 100.0, 105.0, 110.0, 115.0, 120.0, 125.0, 100.0);
     let p0: float = f32x8_get(payoffs, 0);
     let p3: float = f32x8_get(payoffs, 3);
@@ -70,6 +78,36 @@ fn test_simd_option_payoff() -> int {
     let sum_payoffs: float = f32x8_sum(payoffs);
     if (sum_payoffs < 74.0 || sum_payoffs > 76.0) {
         return 4;
+    }
+
+    let put_payoffs: f32x8 = bs_simd_put_payoff8(90.0, 95.0, 100.0, 105.0, 110.0, 115.0, 120.0, 125.0, 100.0);
+    let put_p0: float = f32x8_get(put_payoffs, 0);
+    if (put_p0 < 9.9 || put_p0 > 10.1) {
+        return 5;
+    }
+
+    let vs: f32x8 = f32x8(100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0);
+    let vk: f32x8 = f32x8(100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0);
+    let vt: f32x8 = f32x8(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
+    let vr: f32x8 = f32x8(0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05);
+    let vsig: f32x8 = f32x8(0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20);
+    let batch_call: f32x8 = bs_batch_call8(vs, vk, vt, vr, vsig);
+    let bc0: float = f32x8_get(batch_call, 0);
+    if (bc0 < 10.40 || bc0 > 10.55) {
+        return 6;
+    }
+    return 0;
+}
+
+#[test]
+fn test_american_binomial_tree() -> int {
+    let am_call: float = crr_american_option(100.0, 100.0, 1.0, 0.05, 0.20, 50, 1);
+    if (am_call < 10.2 || am_call > 10.8) {
+        return 1;
+    }
+    let am_put: float = crr_american_option(100.0, 100.0, 1.0, 0.05, 0.20, 50, 0);
+    if (am_put < 5.8 || am_put > 6.4) {
+        return 2;
     }
     return 0;
 }

@@ -23,7 +23,7 @@ fn test_fix_new_order_single_serialization() -> int {
 }
 
 #[test]
-fn test_fix_execution_report_and_tag_lookup() -> int {
+fn test_fix_execution_report_and_fast_lookup() -> int {
     let exec_msg: string = fix_build_execution_report("ORD1001", "EXEC99", "MSFT", 1, 305.50, 100, "EXCHANGE_B", "CLIENT_A");
     let symbol: string = fix_get_field(exec_msg, 55);
     if (symbol != "MSFT") {
@@ -33,19 +33,27 @@ fn test_fix_execution_report_and_tag_lookup() -> int {
     if (exec_id != "EXEC99") {
         return 2;
     }
-    let side: string = fix_get_field(exec_msg, 54);
-    if (side != "1") {
+    let side_fast: int = fix_fast_get_int(exec_msg, 54);
+    if (side_fast != 1) {
         return 3;
+    }
+    let qty_fast: int = fix_fast_get_int(exec_msg, 32);
+    if (qty_fast != 100) {
+        return 4;
+    }
+    let px_fast: float = fix_fast_get_float(exec_msg, 31);
+    if (px_fast < 305.4 || px_fast > 305.6) {
+        return 5;
     }
     let valid_cs: int = fix_validate_checksum(exec_msg);
     if (valid_cs != 1) {
-        return 4;
+        return 6;
     }
     return 0;
 }
 
 #[test]
-fn test_itch_encoding() -> int {
+fn test_itch_encoding_and_parsing() -> int {
     let add_pkt: string = itch_encode_add_order(1001, 1, 200, "NVDA", 12050);
     if (itch_decode_type(add_pkt) != "A") {
         return 1;
@@ -53,9 +61,17 @@ fn test_itch_encoding() -> int {
     if (text_find(add_pkt, "NVDA") < 0) {
         return 2;
     }
+    var ref_out: int = 0;
+    var side_out: int = 0;
+    var sh_out: int = 0;
+    var px_out: int = 0;
+    let ok_p: int = itch_parse_add_order(add_pkt, &ref_out, &side_out, &sh_out, &px_out);
+    if (ok_p != 1 || ref_out != 1001 || side_out != 1 || sh_out != 200 || px_out != 12050) {
+        return 3;
+    }
     let exec_pkt: string = itch_encode_order_executed(1001, 200, 8888);
     if (itch_decode_type(exec_pkt) != "E") {
-        return 3;
+        return 4;
     }
     return 0;
 }

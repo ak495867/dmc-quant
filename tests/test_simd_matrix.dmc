@@ -53,5 +53,49 @@ fn test_matmul_and_simd_dot() -> int {
     if (dot < 35.9 || dot > 36.1) {
         return 3;
     }
+    let norm: float = simd_vector_norm8(va);
+    if (norm < 14.2 || norm > 14.3) {
+        return 4;
+    }
+    return 0;
+}
+
+#[test]
+fn test_matmul_4x4_and_cov() -> int {
+    var m1: [float; 16] = [
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0
+    ];
+    var m2: [float; 16] = [
+        2.0, 3.0, 4.0, 5.0,
+        1.0, 2.0, 3.0, 4.0,
+        5.0, 6.0, 7.0, 8.0,
+        9.0, 1.0, 2.0, 3.0
+    ];
+    var res: [float; 16] = [
+        0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0
+    ];
+    let ok_mul: int = matrix_mul_4x4(&m1[0], &m2[0], &res[0]);
+    if (ok_mul != 1) {
+        return 1;
+    }
+    if (res[0] < 1.99 || res[0] > 2.01 || res[15] < 2.99 || res[15] > 3.01) {
+        return 2;
+    }
+
+    var rets: [float; 6] = [0.01, 0.02, 0.03, 0.02, 0.04, 0.06];
+    var cov2: [float; 4] = [0.0, 0.0, 0.0, 0.0];
+    let ok_cov: int = matrix_cov_from_returns(&rets[0], 2, 3, &cov2[0]);
+    if (ok_cov != 1) {
+        return 3;
+    }
+    if (cov2[0] <= 0.0 || cov2[3] <= 0.0) {
+        return 4;
+    }
     return 0;
 }

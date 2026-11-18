@@ -6,6 +6,17 @@ static int factor_cmp_flt(const void* a, const void* b) {
     if (fa > fb) return 1;
     return 0;
 }
+
+static void factor_calc_ranks(const float* in_v, int n, float* out_r) {
+    if (!in_v || !out_r || n <= 0) return;
+    for (int i = 0; i < n; i = i + 1) {
+        int r = 1;
+        for (int j = 0; j < n; j = j + 1) {
+            if (in_v[j] < in_v[i]) r = r + 1;
+        }
+        out_r[i] = (float)r;
+    }
+}
 }
 
 fn factor_zscore(vals: *float, count: int, out_zscores: *float) -> int {
@@ -109,4 +120,52 @@ fn factor_information_coefficient(signals: *float, fwd_returns: *float, count: i
         }
     }
     return ic;
+}
+
+fn factor_rank(vals: *float, count: int, out_ranks: *float) -> int {
+    var ok: int = 0;
+    c_code {
+        if (vals && out_ranks && count > 0) {
+            factor_calc_ranks(vals, count, out_ranks);
+            for (int i = 0; i < count; i = i + 1) {
+                out_ranks[i] = (float)(out_ranks[i] / (double)count);
+            }
+            ok = 1;
+        }
+    }
+    return ok;
+}
+
+fn factor_spearman_ic(signals: *float, fwd_returns: *float, count: int) -> float {
+    var rank_ic: float = 0.0;
+    c_code {
+        if (signals && fwd_returns && count > 1) {
+            float* r_sig = (float*)malloc(count * sizeof(float));
+            float* r_ret = (float*)malloc(count * sizeof(float));
+            factor_calc_ranks(signals, count, r_sig);
+            factor_calc_ranks(fwd_returns, count, r_ret);
+            double ss = 0.0, sr = 0.0;
+            for (int i = 0; i < count; i = i + 1) {
+                ss = ss + r_sig[i];
+                sr = sr + r_ret[i];
+            }
+            double ms = ss / count;
+            double mr = sr / count;
+            double num = 0.0, vars = 0.0, varr = 0.0;
+            for (int i = 0; i < count; i = i + 1) {
+                double ds = r_sig[i] - ms;
+                double dr = r_ret[i] - mr;
+                num = num + ds * dr;
+                vars = vars + ds * ds;
+                varr = varr + dr * dr;
+            }
+            double denom = sqrt(vars * varr);
+            if (denom > 1e-9) {
+                rank_ic = (float)(num / denom);
+            }
+            free(r_sig);
+            free(r_ret);
+        }
+    }
+    return rank_ic;
 }

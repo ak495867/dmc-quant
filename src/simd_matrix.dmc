@@ -84,7 +84,64 @@ fn matrix_vector_mul_3x3(mat: *float, vec: *float, out_res: *float) -> int {
     return ok;
 }
 
+fn matrix_mul_4x4(a: *float, b: *float, out_c: *float) -> int {
+    var ok: int = 0;
+    c_code {
+        if (a && b && out_c) {
+            for (int r = 0; r < 4; r = r + 1) {
+                for (int c = 0; c < 4; c = c + 1) {
+                    double sum = 0.0;
+                    for (int k = 0; k < 4; k = k + 1) {
+                        sum = sum + a[r * 4 + k] * b[k * 4 + c];
+                    }
+                    out_c[r * 4 + c] = (float)sum;
+                }
+            }
+            ok = 1;
+        }
+    }
+    return ok;
+}
+
+fn matrix_cov_from_returns(returns_flat: *float, num_assets: int, num_periods: int, out_cov: *float) -> int {
+    var ok: int = 0;
+    c_code {
+        if (returns_flat && out_cov && num_assets > 0 && num_periods > 1) {
+            double means[64];
+            for (int a = 0; a < num_assets && a < 64; a = a + 1) {
+                double s = 0.0;
+                for (int t = 0; t < num_periods; t = t + 1) {
+                    s = s + returns_flat[a * num_periods + t];
+                }
+                means[a] = s / num_periods;
+            }
+            for (int i = 0; i < num_assets && i < 64; i = i + 1) {
+                for (int j = 0; j < num_assets && j < 64; j = j + 1) {
+                    double cov_ij = 0.0;
+                    for (int t = 0; t < num_periods; t = t + 1) {
+                        double di = returns_flat[i * num_periods + t] - means[i];
+                        double dj = returns_flat[j * num_periods + t] - means[j];
+                        cov_ij = cov_ij + di * dj;
+                    }
+                    out_cov[i * num_assets + j] = (float)(cov_ij / (num_periods - 1));
+                }
+            }
+            ok = 1;
+        }
+    }
+    return ok;
+}
+
 fn simd_vector_dot8(v1: f32x8, v2: f32x8) -> float {
     let prod: f32x8 = v1 * v2;
     return f32x8_sum(prod);
+}
+
+fn simd_vector_norm8(v: f32x8) -> float {
+    let dot: float = simd_vector_dot8(v, v);
+    var norm: float = 0.0;
+    c_code {
+        norm = (float)sqrt((double)dot);
+    }
+    return norm;
 }

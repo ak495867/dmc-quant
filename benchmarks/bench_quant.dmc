@@ -1,0 +1,83 @@
+import "../src/dmc_quant";
+
+#[bench]
+fn bench_lob_matching() -> int {
+    let b: int = lob_create(10);
+    var i: int = 0;
+    while (i < 1000) {
+        lob_add_limit(b, i, 1, 10000 + (i % 20), 10);
+        lob_add_limit(b, i + 10000, 2, 10010 + (i % 20), 10);
+        i = i + 1;
+    }
+    return 0;
+}
+
+#[bench]
+fn bench_bs_analytical() -> int {
+    var sum: float = 0.0;
+    var i: int = 0;
+    while (i < 10000) {
+        let px: float = bs_call(100.0, 100.0, 1.0, 0.05, 0.20);
+        sum = sum + px;
+        i = i + 1;
+    }
+    return 0;
+}
+
+#[bench]
+fn bench_bs_batch_simd() -> int {
+    let vs: f32x8 = f32x8(100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0);
+    let vk: f32x8 = f32x8(100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0);
+    let vt: f32x8 = f32x8(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
+    let vr: f32x8 = f32x8(0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05);
+    let vsig: f32x8 = f32x8(0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20);
+    var i: int = 0;
+    while (i < 10000) {
+        let res: f32x8 = bs_batch_call8(vs, vk, vt, vr, vsig);
+        i = i + 1;
+    }
+    return 0;
+}
+
+#[bench]
+fn bench_timeseries_sma_rsi() -> int {
+    var prices: [float; 20] = [
+        100.0, 101.0, 102.0, 101.5, 103.0,
+        102.5, 104.0, 105.0, 104.5, 106.0,
+        107.0, 106.5, 108.0, 107.5, 109.0,
+        110.0, 109.5, 111.0, 110.5, 112.0
+    ];
+    var i: int = 0;
+    while (i < 5000) {
+        let sma: float = ts_sma(&prices[0], 20, 10);
+        let rsi: float = ts_rsi(&prices[0], 20, 10);
+        i = i + 1;
+    }
+    return 0;
+}
+
+#[bench]
+fn bench_fix_parsing() -> int {
+    let msg: string = fix_build_new_order_single("B1001", "NVDA", 1, 125.50, 100, "DESK_A", "EXCHANGE");
+    var i: int = 0;
+    while (i < 2000) {
+        let tag54: int = fix_fast_get_int(msg, 54);
+        let tag38: int = fix_fast_get_int(msg, 38);
+        let tag44: float = fix_fast_get_float(msg, 44);
+        i = i + 1;
+    }
+    return 0;
+}
+
+#[bench]
+fn bench_cholesky_factorization() -> int {
+    var l00: float = 0.0;
+    var l10: float = 0.0;
+    var l11: float = 0.0;
+    var i: int = 0;
+    while (i < 10000) {
+        matrix_cholesky_2x2(4.0, 2.0, 5.0, &l00, &l10, &l11);
+        i = i + 1;
+    }
+    return 0;
+}

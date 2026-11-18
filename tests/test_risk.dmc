@@ -47,3 +47,18 @@ fn test_max_drawdown_and_beta() -> int {
     }
     return 0;
 }
+
+#[test]
+fn test_omega_and_tail_ratio() -> int {
+    let rets: [float; 6] = [0.04, 0.02, -0.01, 0.03, -0.02, 0.01];
+    let omega: float = risk_omega_ratio(&rets[0], 6, 0.0);
+    if (omega < 2.5 || omega > 3.5) {
+        return 1;
+    }
+    let dist: [float; 10] = [-0.05, -0.03, -0.02, -0.01, 0.0, 0.01, 0.02, 0.03, 0.04, 0.06];
+    let tail: float = risk_tail_ratio(&dist[0], 10, 0.90);
+    if (tail < 1.0 || tail > 3.0) {
+        return 2;
+    }
+    return 0;
+}

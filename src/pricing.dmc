@@ -3,23 +3,60 @@ static double quant_cnd(double x) {
     return 0.5 * (1.0 + erf(x * 0.7071067811865475));
 }
 
+static double quant_fast_cnd_c(double x) {
+    const double a1 = 0.319381530;
+    const double a2 = -0.356563782;
+    const double a3 = 1.781477937;
+    const double a4 = -1.821255978;
+    const double a5 = 1.330274429;
+    const double inv_sqrt_2pi = 0.3989422804014327;
+    double abs_x = (x < 0.0) ? -x : x;
+    double k = 1.0 / (1.0 + 0.2316419 * abs_x);
+    double poly = k * (a1 + k * (a2 + k * (a3 + k * (a4 + k * a5))));
+    double pdf = inv_sqrt_2pi * exp(-0.5 * abs_x * abs_x);
+    double cnd = 1.0 - pdf * poly;
+    if (x < 0.0) return 1.0 - cnd;
+    return cnd;
+}
+
 static double quant_pdf(double x) {
     const double inv_sqrt_2pi = 0.3989422804014327;
     return inv_sqrt_2pi * exp(-0.5 * x * x);
 }
+
+static double quant_bs_call_core(double s, double k, double t, double r, double sigma) {
+    if (t <= 0.0 || sigma <= 0.0) {
+        return (s > k) ? (s - k) : 0.0;
+    }
+    double sqrt_t = sqrt(t);
+    double d1 = (log(s / k) + (r + 0.5 * sigma * sigma) * t) / (sigma * sqrt_t);
+    double d2 = d1 - sigma * sqrt_t;
+    return s * quant_fast_cnd_c(d1) - k * exp(-r * t) * quant_fast_cnd_c(d2);
+}
+
+static double quant_bs_put_core(double s, double k, double t, double r, double sigma) {
+    if (t <= 0.0 || sigma <= 0.0) {
+        return (k > s) ? (k - s) : 0.0;
+    }
+    double sqrt_t = sqrt(t);
+    double d1 = (log(s / k) + (r + 0.5 * sigma * sigma) * t) / (sigma * sqrt_t);
+    double d2 = d1 - sigma * sqrt_t;
+    return k * exp(-r * t) * quant_fast_cnd_c(-d2) - s * quant_fast_cnd_c(-d1);
+}
+}
+
+fn bs_fast_cnd(x: float) -> float {
+    var res: float = 0.0;
+    c_code {
+        res = (float)quant_fast_cnd_c((double)x);
+    }
+    return res;
 }
 
 fn bs_call(s: float, k: float, t: float, r: float, sigma: float) -> float {
     var price: float = 0.0;
     c_code {
-        if (t <= 0.0 || sigma <= 0.0) {
-            price = (s > k) ? (s - k) : 0.0;
-        } else {
-            double sqrt_t = sqrt(t);
-            double d1 = (log(s / k) + (r + 0.5 * sigma * sigma) * t) / (sigma * sqrt_t);
-            double d2 = d1 - sigma * sqrt_t;
-            price = (float)(s * quant_cnd(d1) - k * exp(-r * t) * quant_cnd(d2));
-        }
+        price = (float)quant_bs_call_core((double)s, (double)k, (double)t, (double)r, (double)sigma);
     }
     return price;
 }
@@ -27,14 +64,7 @@ fn bs_call(s: float, k: float, t: float, r: float, sigma: float) -> float {
 fn bs_put(s: float, k: float, t: float, r: float, sigma: float) -> float {
     var price: float = 0.0;
     c_code {
-        if (t <= 0.0 || sigma <= 0.0) {
-            price = (k > s) ? (k - s) : 0.0;
-        } else {
-            double sqrt_t = sqrt(t);
-            double d1 = (log(s / k) + (r + 0.5 * sigma * sigma) * t) / (sigma * sqrt_t);
-            double d2 = d1 - sigma * sqrt_t;
-            price = (float)(k * exp(-r * t) * quant_cnd(-d2) - s * quant_cnd(-d1));
-        }
+        price = (float)quant_bs_put_core((double)s, (double)k, (double)t, (double)r, (double)sigma);
     }
     return price;
 }
@@ -155,6 +185,60 @@ fn bs_monte_carlo(s: float, k: float, t: float, r: float, sigma: float, n_sims: 
     return mean_payoff;
 }
 
+fn bs_monte_carlo_fast(s: float, k: float, t: float, r: float, sigma: float, n_sims: int, is_call: int) -> float {
+    var mean_payoff: float = 0.0;
+    c_code {
+        unsigned int state = 2463534242;
+        double sum = 0.0;
+        double drift = (r - 0.5 * sigma * sigma) * t;
+        double vol_sqrt = sigma * sqrt(t);
+        for (int i = 0; i < n_sims; i = i + 1) {
+            state = state ^ (state << 13);
+            state = state ^ (state >> 17);
+            state = state ^ (state << 5);
+            double u1 = ((state & 0x7fffffff) + 1.0) / 2147483649.0;
+            state = state ^ (state << 13);
+            state = state ^ (state >> 17);
+            state = state ^ (state << 5);
+            double u2 = ((state & 0x7fffffff) + 1.0) / 2147483649.0;
+            double z = sqrt(-2.0 * log(u1)) * cos(6.283185307179586 * u2);
+            double st = s * exp(drift + vol_sqrt * z);
+            double payoff = is_call ? ((st > k) ? (st - k) : 0.0) : ((k > st) ? (k - st) : 0.0);
+            sum = sum + payoff;
+        }
+        mean_payoff = (float)(exp(-r * t) * (sum / n_sims));
+    }
+    return mean_payoff;
+}
+
+fn crr_american_option(s: float, k: float, t: float, r: float, sigma: float, steps: int, is_call: int) -> float {
+    var price: float = 0.0;
+    c_code {
+        if (steps > 0 && steps <= 500 && s > 0.0 && k > 0.0 && t > 0.0 && sigma > 0.0) {
+            double dt = t / steps;
+            double u = exp(sigma * sqrt(dt));
+            double d = 1.0 / u;
+            double p = (exp(r * dt) - d) / (u - d);
+            double disc = exp(-r * dt);
+            double v[501];
+            for (int i = 0; i <= steps; i = i + 1) {
+                double st = s * pow(u, steps - i) * pow(d, i);
+                v[i] = is_call ? ((st > k) ? (st - k) : 0.0) : ((k > st) ? (k - st) : 0.0);
+            }
+            for (int j = steps - 1; j >= 0; j = j - 1) {
+                for (int i = 0; i <= j; i = i + 1) {
+                    double hold = disc * (p * v[i] + (1.0 - p) * v[i + 1]);
+                    double st = s * pow(u, j - i) * pow(d, i);
+                    double exercise = is_call ? ((st > k) ? (st - k) : 0.0) : ((k > st) ? (k - st) : 0.0);
+                    v[i] = (exercise > hold) ? exercise : hold;
+                }
+            }
+            price = (float)v[0];
+        }
+    }
+    return price;
+}
+
 fn bs_simd_call_payoff8(s0: float, s1: float, s2: float, s3: float, s4: float, s5: float, s6: float, s7: float, strike: float) -> f32x8 {
     var p0: float = 0.0;
     var p1: float = 0.0;
@@ -173,4 +257,54 @@ fn bs_simd_call_payoff8(s0: float, s1: float, s2: float, s3: float, s4: float, s
     if (s6 > strike) { p6 = s6 - strike; }
     if (s7 > strike) { p7 = s7 - strike; }
     return f32x8(p0, p1, p2, p3, p4, p5, p6, p7);
+}
+
+fn bs_simd_put_payoff8(s0: float, s1: float, s2: float, s3: float, s4: float, s5: float, s6: float, s7: float, strike: float) -> f32x8 {
+    var p0: float = 0.0;
+    var p1: float = 0.0;
+    var p2: float = 0.0;
+    var p3: float = 0.0;
+    var p4: float = 0.0;
+    var p5: float = 0.0;
+    var p6: float = 0.0;
+    var p7: float = 0.0;
+    if (strike > s0) { p0 = strike - s0; }
+    if (strike > s1) { p1 = strike - s1; }
+    if (strike > s2) { p2 = strike - s2; }
+    if (strike > s3) { p3 = strike - s3; }
+    if (strike > s4) { p4 = strike - s4; }
+    if (strike > s5) { p5 = strike - s5; }
+    if (strike > s6) { p6 = strike - s6; }
+    if (strike > s7) { p7 = strike - s7; }
+    return f32x8(p0, p1, p2, p3, p4, p5, p6, p7);
+}
+
+fn bs_batch_call8(s: f32x8, k: f32x8, t: f32x8, r: f32x8, sigma: f32x8) -> f32x8 {
+    var out_p: [float; 8] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    c_code {
+        float* sp = (float*)&s;
+        float* kp = (float*)&k;
+        float* tp = (float*)&t;
+        float* rp = (float*)&r;
+        float* sigp = (float*)&sigma;
+        for (int i = 0; i < 8; i = i + 1) {
+            out_p[i] = (float)quant_bs_call_core((double)sp[i], (double)kp[i], (double)tp[i], (double)rp[i], (double)sigp[i]);
+        }
+    }
+    return f32x8(out_p[0], out_p[1], out_p[2], out_p[3], out_p[4], out_p[5], out_p[6], out_p[7]);
+}
+
+fn bs_batch_put8(s: f32x8, k: f32x8, t: f32x8, r: f32x8, sigma: f32x8) -> f32x8 {
+    var out_p: [float; 8] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    c_code {
+        float* sp = (float*)&s;
+        float* kp = (float*)&k;
+        float* tp = (float*)&t;
+        float* rp = (float*)&r;
+        float* sigp = (float*)&sigma;
+        for (int i = 0; i < 8; i = i + 1) {
+            out_p[i] = (float)quant_bs_put_core((double)sp[i], (double)kp[i], (double)tp[i], (double)rp[i], (double)sigp[i]);
+        }
+    }
+    return f32x8(out_p[0], out_p[1], out_p[2], out_p[3], out_p[4], out_p[5], out_p[6], out_p[7]);
 }

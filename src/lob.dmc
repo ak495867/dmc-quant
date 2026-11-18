@@ -24,7 +24,7 @@ typedef struct {
 } C_Order;
 
 typedef struct {
-    C_Order orders[256];
+    C_Order orders[1024];
     int order_count;
     int best_bid;
     int best_ask;
@@ -43,7 +43,7 @@ static void lob_internal_init(int bid) {
     g_books[bid].total_volume = 0;
     g_books[bid].last_trade_price = 0;
     g_books[bid].last_trade_qty = 0;
-    for (int i = 0; i < 256; i = i + 1) {
+    for (int i = 0; i < 1024; i = i + 1) {
         g_books[bid].orders[i].active = 0;
         g_books[bid].orders[i].filled = 0;
     }
@@ -53,7 +53,8 @@ static void lob_update_bbo(int bid) {
     if (bid < 0 || bid >= 16) return;
     int max_bid = 0;
     int min_ask = 2147483647;
-    for (int i = 0; i < g_books[bid].order_count; i = i + 1) {
+    int count = g_books[bid].order_count;
+    for (int i = 0; i < count; i = i + 1) {
         if (!g_books[bid].orders[i].active) continue;
         if (g_books[bid].orders[i].filled >= g_books[bid].orders[i].qty) continue;
         int s = g_books[bid].orders[i].side;
@@ -76,47 +77,70 @@ fn lob_create(book_id: int) -> int {
     return book_id;
 }
 
+fn lob_clear(book_id: int) -> int {
+    c_code {
+        lob_internal_init(book_id);
+    }
+    return 1;
+}
+
 fn lob_add_limit(book_id: int, order_id: int, side: int, price: int, qty: int) -> int {
     var matched_qty: int = 0;
     c_code {
         if (book_id >= 0 && book_id < 16) {
             int remaining = qty;
             if (side == 1) {
-                for (int i = 0; i < g_books[book_id].order_count && remaining > 0; i = i + 1) {
-                    C_Order* opp = &g_books[book_id].orders[i];
-                    if (!opp->active || opp->side != 2) continue;
-                    if (opp->filled >= opp->qty) continue;
-                    if (opp->price <= price) {
-                        int avail = opp->qty - opp->filled;
-                        int fill = (remaining < avail) ? remaining : avail;
-                        opp->filled = opp->filled + fill;
-                        remaining = remaining - fill;
-                        matched_qty = matched_qty + fill;
-                        g_books[book_id].total_volume = g_books[book_id].total_volume + fill;
-                        g_books[book_id].last_trade_price = opp->price;
-                        g_books[book_id].last_trade_qty = fill;
-                        if (opp->filled >= opp->qty) opp->active = 0;
+                while (remaining > 0) {
+                    int best_opp_p = 2147483647;
+                    int best_opp_idx = -1;
+                    int count = g_books[book_id].order_count;
+                    for (int i = 0; i < count; i = i + 1) {
+                        C_Order* opp = &g_books[book_id].orders[i];
+                        if (!opp->active || opp->side != 2 || opp->filled >= opp->qty) continue;
+                        if (opp->price <= price && opp->price < best_opp_p) {
+                            best_opp_p = opp->price;
+                            best_opp_idx = i;
+                        }
                     }
+                    if (best_opp_idx < 0) break;
+                    C_Order* match_opp = &g_books[book_id].orders[best_opp_idx];
+                    int avail = match_opp->qty - match_opp->filled;
+                    int fill = (remaining < avail) ? remaining : avail;
+                    match_opp->filled = match_opp->filled + fill;
+                    remaining = remaining - fill;
+                    matched_qty = matched_qty + fill;
+                    g_books[book_id].total_volume = g_books[book_id].total_volume + fill;
+                    g_books[book_id].last_trade_price = match_opp->price;
+                    g_books[book_id].last_trade_qty = fill;
+                    if (match_opp->filled >= match_opp->qty) match_opp->active = 0;
                 }
             } else if (side == 2) {
-                for (int i = 0; i < g_books[book_id].order_count && remaining > 0; i = i + 1) {
-                    C_Order* opp = &g_books[book_id].orders[i];
-                    if (!opp->active || opp->side != 1) continue;
-                    if (opp->filled >= opp->qty) continue;
-                    if (opp->price >= price) {
-                        int avail = opp->qty - opp->filled;
-                        int fill = (remaining < avail) ? remaining : avail;
-                        opp->filled = opp->filled + fill;
-                        remaining = remaining - fill;
-                        matched_qty = matched_qty + fill;
-                        g_books[book_id].total_volume = g_books[book_id].total_volume + fill;
-                        g_books[book_id].last_trade_price = opp->price;
-                        g_books[book_id].last_trade_qty = fill;
-                        if (opp->filled >= opp->qty) opp->active = 0;
+                while (remaining > 0) {
+                    int best_opp_p = -1;
+                    int best_opp_idx = -1;
+                    int count = g_books[book_id].order_count;
+                    for (int i = 0; i < count; i = i + 1) {
+                        C_Order* opp = &g_books[book_id].orders[i];
+                        if (!opp->active || opp->side != 1 || opp->filled >= opp->qty) continue;
+                        if (opp->price >= price && opp->price > best_opp_p) {
+                            best_opp_p = opp->price;
+                            best_opp_idx = i;
+                        }
                     }
+                    if (best_opp_idx < 0) break;
+                    C_Order* match_opp = &g_books[book_id].orders[best_opp_idx];
+                    int avail = match_opp->qty - match_opp->filled;
+                    int fill = (remaining < avail) ? remaining : avail;
+                    match_opp->filled = match_opp->filled + fill;
+                    remaining = remaining - fill;
+                    matched_qty = matched_qty + fill;
+                    g_books[book_id].total_volume = g_books[book_id].total_volume + fill;
+                    g_books[book_id].last_trade_price = match_opp->price;
+                    g_books[book_id].last_trade_qty = fill;
+                    if (match_opp->filled >= match_opp->qty) match_opp->active = 0;
                 }
             }
-            if (remaining > 0 && g_books[book_id].order_count < 256) {
+            if (remaining > 0 && g_books[book_id].order_count < 1024) {
                 int idx = g_books[book_id].order_count;
                 g_books[book_id].order_count = g_books[book_id].order_count + 1;
                 g_books[book_id].orders[idx].id = order_id;
@@ -138,10 +162,11 @@ fn lob_add_market(book_id: int, side: int, qty: int) -> int {
         if (book_id >= 0 && book_id < 16) {
             int remaining = qty;
             int opp_side = (side == 1) ? 2 : 1;
+            int count = g_books[book_id].order_count;
             while (remaining > 0) {
                 int best_idx = -1;
                 int best_p = (side == 1) ? 2147483647 : -1;
-                for (int i = 0; i < g_books[book_id].order_count; i = i + 1) {
+                for (int i = 0; i < count; i = i + 1) {
                     C_Order* o = &g_books[book_id].orders[i];
                     if (!o->active || o->side != opp_side || o->filled >= o->qty) continue;
                     if (side == 1 && o->price < best_p) {
@@ -174,7 +199,8 @@ fn lob_cancel(book_id: int, order_id: int) -> int {
     var cancelled: int = 0;
     c_code {
         if (book_id >= 0 && book_id < 16) {
-            for (int i = 0; i < g_books[book_id].order_count; i = i + 1) {
+            int count = g_books[book_id].order_count;
+            for (int i = 0; i < count; i = i + 1) {
                 if (g_books[book_id].orders[i].id == order_id && g_books[book_id].orders[i].active) {
                     g_books[book_id].orders[i].active = 0;
                     cancelled = g_books[book_id].orders[i].qty - g_books[book_id].orders[i].filled;
@@ -228,7 +254,8 @@ fn lob_depth_qty(book_id: int, side: int) -> int {
     var total: int = 0;
     c_code {
         if (book_id >= 0 && book_id < 16) {
-            for (int i = 0; i < g_books[book_id].order_count; i = i + 1) {
+            int count = g_books[book_id].order_count;
+            for (int i = 0; i < count; i = i + 1) {
                 if (g_books[book_id].orders[i].active && g_books[book_id].orders[i].side == side) {
                     total = total + (g_books[book_id].orders[i].qty - g_books[book_id].orders[i].filled);
                 }
@@ -252,4 +279,57 @@ fn lob_last_price(book_id: int) -> int {
         if (book_id >= 0 && book_id < 16) lp = g_books[book_id].last_trade_price;
     }
     return lp;
+}
+
+fn lob_level2_depth(book_id: int, side: int, level: int, out_price: *int, out_qty: *int) -> int {
+    var ok: int = 0;
+    c_code {
+        if (book_id >= 0 && book_id < 16 && level >= 0 && out_price && out_qty) {
+            int count = g_books[book_id].order_count;
+            int distinct_prices[64];
+            int distinct_qtys[64];
+            int num_distinct = 0;
+            for (int i = 0; i < count; i = i + 1) {
+                C_Order* o = &g_books[book_id].orders[i];
+                if (!o->active || o->side != side || o->filled >= o->qty) continue;
+                int p = o->price;
+                int q = o->qty - o->filled;
+                int found = -1;
+                for (int d = 0; d < num_distinct; d = d + 1) {
+                    if (distinct_prices[d] == p) {
+                        found = d;
+                        break;
+                    }
+                }
+                if (found >= 0) {
+                    distinct_qtys[found] = distinct_qtys[found] + q;
+                } else if (num_distinct < 64) {
+                    distinct_prices[num_distinct] = p;
+                    distinct_qtys[num_distinct] = q;
+                    num_distinct = num_distinct + 1;
+                }
+            }
+            for (int i = 0; i < num_distinct; i = i + 1) {
+                for (int j = i + 1; j < num_distinct; j = j + 1) {
+                    int swap = 0;
+                    if (side == 1 && distinct_prices[j] > distinct_prices[i]) swap = 1;
+                    else if (side == 2 && distinct_prices[j] < distinct_prices[i]) swap = 1;
+                    if (swap) {
+                        int tp = distinct_prices[i];
+                        distinct_prices[i] = distinct_prices[j];
+                        distinct_prices[j] = tp;
+                        int tq = distinct_qtys[i];
+                        distinct_qtys[i] = distinct_qtys[j];
+                        distinct_qtys[j] = tq;
+                    }
+                }
+            }
+            if (level < num_distinct) {
+                *out_price = distinct_prices[level];
+                *out_qty = distinct_qtys[level];
+                ok = 1;
+            }
+        }
+    }
+    return ok;
 }

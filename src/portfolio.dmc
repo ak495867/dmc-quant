@@ -131,3 +131,13 @@ fn port_rebalance_shares(curr_shares: *int, prices: *float, target_weights: *flo
     }
     return ok;
 }
+
+fn port_cagr(start_val: float, end_val: float, years: float) -> float {
+    var cagr: float = 0.0;
+    c_code {
+        if (start_val > 0.0 && end_val > 0.0 && years > 0.0) {
+            cagr = (float)(pow(end_val / start_val, 1.0 / years) - 1.0);
+        }
+    }
+    return cagr;
+}

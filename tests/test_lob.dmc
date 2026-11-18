@@ -73,3 +73,26 @@ fn test_lob_market_order_and_cancel() -> int {
     }
     return 0;
 }
+
+#[test]
+fn test_lob_level2_depth() -> int {
+    let b: int = lob_create(3);
+    lob_add_limit(b, 401, 1, 1000, 50);
+    lob_add_limit(b, 402, 1, 1000, 75);
+    lob_add_limit(b, 403, 1, 990, 200);
+
+    var l0_px: int = 0;
+    var l0_qty: int = 0;
+    let ok0: int = lob_level2_depth(b, 1, 0, &l0_px, &l0_qty);
+    if (ok0 != 1 || l0_px != 1000 || l0_qty != 125) {
+        return 1;
+    }
+
+    var l1_px: int = 0;
+    var l1_qty: int = 0;
+    let ok1: int = lob_level2_depth(b, 1, 1, &l1_px, &l1_qty);
+    if (ok1 != 1 || l1_px != 990 || l1_qty != 200) {
+        return 2;
+    }
+    return 0;
+}

@@ -80,6 +80,32 @@ fn fix_get_field(raw_msg: string, tag: int) -> string {
     return found_val;
 }
 
+fn fix_fast_get_int(raw_msg: string, tag: int) -> int {
+    var val: int = 0;
+    c_code {
+        char tag_buf[32];
+        snprintf(tag_buf, sizeof(tag_buf), "%d=", tag);
+        const char* p = strstr(raw_msg, tag_buf);
+        if (p) {
+            val = atoi(p + strlen(tag_buf));
+        }
+    }
+    return val;
+}
+
+fn fix_fast_get_float(raw_msg: string, tag: int) -> float {
+    var val: float = 0.0;
+    c_code {
+        char tag_buf[32];
+        snprintf(tag_buf, sizeof(tag_buf), "%d=", tag);
+        const char* p = strstr(raw_msg, tag_buf);
+        if (p) {
+            val = (float)atof(p + strlen(tag_buf));
+        }
+    }
+    return val;
+}
+
 fn fix_validate_checksum(raw_msg: string) -> int {
     var valid: int = 0;
     c_code {
@@ -98,11 +124,31 @@ fn itch_encode_add_order(order_ref: int, side: int, shares: int, stock: string, 
     var packet: string = "";
     c_code {
         char buf[64];
-        char side_char = (side == 1) ? 'B' : 'S';
+        char side_char = (side == 1) ? 66 : 83;
         snprintf(buf, sizeof(buf), "A:%d:%c:%d:%s:%d", order_ref, side_char, shares, stock, price);
         packet = strdup(buf);
     }
     return packet;
+}
+
+fn itch_parse_add_order(packet: string, out_ref: *int, out_side: *int, out_shares: *int, out_price: *int) -> int {
+    var ok: int = 0;
+    c_code {
+        if (packet && packet[0] == 65 && packet[1] == 58) {
+            int ref_v = 0, sh_v = 0, px_v = 0;
+            char s_ch = 32;
+            char sym[32];
+            int matched = sscanf(packet, "A:%d:%c:%d:%31[^:]:%d", &ref_v, &s_ch, &sh_v, sym, &px_v);
+            if (matched == 5) {
+                if (out_ref) *out_ref = ref_v;
+                if (out_side) *out_side = (s_ch == 66) ? 1 : 2;
+                if (out_shares) *out_shares = sh_v;
+                if (out_price) *out_price = px_v;
+                ok = 1;
+            }
+        }
+    }
+    return ok;
 }
 
 fn itch_encode_order_executed(order_ref: int, shares: int, match_number: int) -> string {

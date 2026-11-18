@@ -148,3 +148,46 @@ fn risk_beta(asset_returns: *float, market_returns: *float, count: int) -> float
     }
     return beta;
 }
+
+fn risk_omega_ratio(returns: *float, count: int, threshold: float) -> float {
+    var omega: float = 1.0;
+    c_code {
+        if (returns && count > 0) {
+            double gain_sum = 0.0;
+            double loss_sum = 0.0;
+            for (int i = 0; i < count; i = i + 1) {
+                double diff = returns[i] - threshold;
+                if (diff > 0.0) gain_sum = gain_sum + diff;
+                else loss_sum = loss_sum - diff;
+            }
+            if (loss_sum > 1e-9) {
+                omega = (float)(gain_sum / loss_sum);
+            } else if (gain_sum > 0.0) {
+                omega = 100.0;
+            }
+        }
+    }
+    return omega;
+}
+
+fn risk_tail_ratio(returns: *float, count: int, percentile: float) -> float {
+    var ratio: float = 1.0;
+    c_code {
+        if (returns && count > 4 && percentile > 0.5 && percentile < 1.0) {
+            float* sorted = (float*)malloc(count * sizeof(float));
+            for (int i = 0; i < count; i = i + 1) sorted[i] = returns[i];
+            qsort(sorted, count, sizeof(float), quant_cmp_float);
+            int high_idx = (int)(percentile * count);
+            int low_idx = (int)((1.0 - percentile) * count);
+            if (high_idx >= count) high_idx = count - 1;
+            if (low_idx < 0) low_idx = 0;
+            double right_tail = sorted[high_idx];
+            double left_tail = fabs(sorted[low_idx]);
+            if (left_tail > 1e-9) {
+                ratio = (float)(right_tail / left_tail);
+            }
+            free(sorted);
+        }
+    }
+    return ratio;
+}

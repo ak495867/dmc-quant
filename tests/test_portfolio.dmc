@@ -74,5 +74,9 @@ fn test_portfolio_metrics_and_rebalance() -> int {
     if (trades[0] != 200 || trades[1] != -200) {
         return 4;
     }
+    let cagr: float = port_cagr(100.0, 144.0, 2.0);
+    if (cagr < 0.19 || cagr > 0.21) {
+        return 5;
+    }
     return 0;
 }
