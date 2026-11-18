@@ -1,0 +1,14 @@
+import "../src/dmc_quant";
+
+#[bench]
+fn bench_amm_routing() -> int {
+    var sum: float = 0.0;
+    var i: int = 0;
+    while (i < 10000) {
+        let out_amt: float = amm_get_amount_out(10.0, 10000.0, 20000.0, 30);
+        let slip: float = amm_slippage_bps(10.0, 10000.0, 20000.0, 30);
+        sum = sum + out_amt + slip;
+        i = i + 1;
+    }
+    return 0;
+}

@@ -91,17 +91,19 @@ Output:
 ## ⚡ Benchmarks & Performance (`dmc bench benchmarks`)
 
 ```
-bench_lob_matching:           0.006s (1,000 crossed orders matched & book updated)
-bench_bs_analytical:          0.001s (10,000 analytical option pricings ~ 10,000,000 options/sec)
-bench_bs_batch_simd:          0.006s (80,000 options priced via 256-bit SIMD)
-bench_timeseries_sma_rsi:     0.000s (5,000 indicator ticks calculated)
-bench_fix_parsing:            0.001s (2,000 zero-allocation FIX messages parsed)
-bench_cholesky_factorization: 0.000s (10,000 matrix factorizations)
-bench_fixed_income_bond_math: 0.004s (10,000 bond pricing & duration calculations)
-bench_microstructure_vpin:    0.000s (10,000 VPIN & Order Imbalances evaluated)
-bench_amm_routing:            0.000s (10,000 AMM constant product routing computations)
+Running 9 benchmark(s) from 9 file(s)...
 
-PASS benchmarks\bench_quant.dmc (9 passed, 0 failed)
+PASS benchmarks\bench_amm.dmc                 (10,000 AMM constant product swaps in 0.001s)
+PASS benchmarks\bench_fix.dmc                 (2,000 zero-allocation FIX messages in 0.000s)
+PASS benchmarks\bench_fixed_income.dmc        (10,000 bond prices & durations in 0.004s)
+PASS benchmarks\bench_lob.dmc                 (1,000 crossed limit orders in 0.007s)
+PASS benchmarks\bench_matrix.dmc              (10,000 Cholesky factorizations in 0.000s)
+PASS benchmarks\bench_microstructure.dmc       (10,000 VPIN & Order Imbalances in 0.000s)
+PASS benchmarks\bench_pricing_analytical.dmc  (10,000 analytical option pricings in 0.001s ~ 10M options/sec)
+PASS benchmarks\bench_pricing_simd.dmc        (80,000 options priced via 256-bit SIMD in 0.007s)
+PASS benchmarks\bench_timeseries.dmc          (5,000 rolling SMA & RSI ticks in 0.001s)
+
+Results: 9 passed, 0 failed
 ```
 
 ---

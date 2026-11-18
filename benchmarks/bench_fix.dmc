@@ -1,0 +1,14 @@
+import "../src/dmc_quant";
+
+#[bench]
+fn bench_fix_parsing() -> int {
+    let msg: string = fix_build_new_order_single("B1001", "NVDA", 1, 125.50, 100, "DESK_A", "EXCHANGE");
+    var i: int = 0;
+    while (i < 2000) {
+        let tag54: int = fix_fast_get_int(msg, 54);
+        let tag38: int = fix_fast_get_int(msg, 38);
+        let tag44: float = fix_fast_get_float(msg, 44);
+        i = i + 1;
+    }
+    return 0;
+}

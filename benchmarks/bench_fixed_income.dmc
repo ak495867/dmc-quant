@@ -1,0 +1,14 @@
+import "../src/dmc_quant";
+
+#[bench]
+fn bench_fixed_income_bond_math() -> int {
+    var sum: float = 0.0;
+    var i: int = 0;
+    while (i < 10000) {
+        let p: float = fi_bond_price(100.0, 0.05, 0.05, 10.0, 2);
+        let d: float = fi_modified_duration(100.0, 0.05, 0.05, 10.0, 2);
+        sum = sum + p + d;
+        i = i + 1;
+    }
+    return 0;
+}

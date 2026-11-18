@@ -1,0 +1,13 @@
+import "../src/dmc_quant";
+
+#[bench]
+fn bench_bs_analytical() -> int {
+    var sum: float = 0.0;
+    var i: int = 0;
+    while (i < 10000) {
+        let px: float = bs_call(100.0, 100.0, 1.0, 0.05, 0.20);
+        sum = sum + px;
+        i = i + 1;
+    }
+    return 0;
+}
