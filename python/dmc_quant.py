@@ -2,11 +2,24 @@ import ctypes
 import os
 import sys
 
-_dll_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "lib", "dmc_quant.dll"))
-if not os.path.exists(_dll_path):
-    _dll_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "lib", "libdmc_quant.so"))
-if not os.path.exists(_dll_path):
-    _dll_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "lib", "libdmc_quant.dylib"))
+_lib_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "lib"))
+_candidates = [
+    os.path.join(_lib_dir, "dmc_quant.dll"),
+    os.path.join(_lib_dir, "libdmc_quant.dll"),
+    os.path.join(_lib_dir, "dmc_quant.so"),
+    os.path.join(_lib_dir, "libdmc_quant.so"),
+    os.path.join(_lib_dir, "dmc_quant.dylib"),
+    os.path.join(_lib_dir, "libdmc_quant.dylib"),
+]
+
+_dll_path = None
+for c in _candidates:
+    if os.path.exists(c):
+        _dll_path = c
+        break
+
+if _dll_path is None:
+    raise FileNotFoundError(f"Could not find dmc_quant shared library in {_lib_dir}. Checked: {_candidates}")
 
 _lib = ctypes.CDLL(_dll_path)
 

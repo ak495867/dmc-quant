@@ -65,8 +65,17 @@ jobs:
       - name: Run Interactive Quant Desk Demo
         run: dmc run examples/quant_desk_demo.dmc
 
-      - name: Build Dynamic Shared Library
-        run: dmc build src/dmc_quant.dmc --shared -o lib/dmc_quant.${{ matrix.shared_ext }}
+      - name: Build Dynamic Shared Library (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p lib
+          dmc build src/dmc_quant.dmc --shared -o lib/dmc_quant.${{ matrix.shared_ext }}
+
+      - name: Build Dynamic Shared Library (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          if (!(Test-Path lib)) { New-Item -ItemType Directory -Force -Path lib }
+          dmc build src/dmc_quant.dmc --shared -o lib/dmc_quant.dll
 
       - name: Setup Python
         uses: actions/setup-python@v5
