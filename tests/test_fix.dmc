@@ -1,0 +1,61 @@
+import "../src/fix";
+
+#[test]
+fn test_fix_new_order_single_serialization() -> int {
+    let fix_msg: string = fix_build_new_order_single("ORD1001", "AAPL", 1, 150.25, 500, "CLIENT_A", "EXCHANGE_B");
+    if (text_find(fix_msg, "8=FIX.4.4\x01") != 0) {
+        return 1;
+    }
+    if (text_find(fix_msg, "35=D\x01") < 0) {
+        return 2;
+    }
+    if (text_find(fix_msg, "11=ORD1001\x01") < 0) {
+        return 3;
+    }
+    if (text_find(fix_msg, "55=AAPL\x01") < 0) {
+        return 4;
+    }
+    let valid_cs: int = fix_validate_checksum(fix_msg);
+    if (valid_cs != 1) {
+        return 5;
+    }
+    return 0;
+}
+
+#[test]
+fn test_fix_execution_report_and_tag_lookup() -> int {
+    let exec_msg: string = fix_build_execution_report("ORD1001", "EXEC99", "MSFT", 1, 305.50, 100, "EXCHANGE_B", "CLIENT_A");
+    let symbol: string = fix_get_field(exec_msg, 55);
+    if (symbol != "MSFT") {
+        return 1;
+    }
+    let exec_id: string = fix_get_field(exec_msg, 17);
+    if (exec_id != "EXEC99") {
+        return 2;
+    }
+    let side: string = fix_get_field(exec_msg, 54);
+    if (side != "1") {
+        return 3;
+    }
+    let valid_cs: int = fix_validate_checksum(exec_msg);
+    if (valid_cs != 1) {
+        return 4;
+    }
+    return 0;
+}
+
+#[test]
+fn test_itch_encoding() -> int {
+    let add_pkt: string = itch_encode_add_order(1001, 1, 200, "NVDA", 12050);
+    if (itch_decode_type(add_pkt) != "A") {
+        return 1;
+    }
+    if (text_find(add_pkt, "NVDA") < 0) {
+        return 2;
+    }
+    let exec_pkt: string = itch_encode_order_executed(1001, 200, 8888);
+    if (itch_decode_type(exec_pkt) != "E") {
+        return 3;
+    }
+    return 0;
+}

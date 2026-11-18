@@ -1,0 +1,11 @@
+bin/
+lib/
+*.exe
+*.o
+*.a
+*.so
+*.dll
+*.dylib
+dmc.lock
+packages/
+_test_tmp_*

@@ -1,0 +1,50 @@
+import "../src/timeseries";
+
+#[test]
+fn test_moving_averages_and_rsi() -> int {
+    let prices: [float; 10] = [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0];
+    let sma5: float = ts_sma(&prices[0], 10, 5);
+    if (sma5 < 16.9 || sma5 > 17.1) {
+        return 1;
+    }
+    let ema5: float = ts_ema(&prices[0], 10, 5);
+    if (ema5 < 16.0 || ema5 > 19.0) {
+        return 2;
+    }
+    let rsi: float = ts_rsi(&prices[0], 10, 5);
+    if (rsi < 95.0) {
+        return 3;
+    }
+    return 0;
+}
+
+#[test]
+fn test_bollinger_and_stats() -> int {
+    let prices: [float; 8] = [100.0, 102.0, 101.0, 103.0, 102.0, 104.0, 103.0, 105.0];
+    var upper: float = 0.0;
+    var mid: float = 0.0;
+    var lower: float = 0.0;
+    let ok: int = ts_bollinger_bands(&prices[0], 8, 5, 2.0, &upper, &mid, &lower);
+    if (ok != 1) {
+        return 1;
+    }
+    if (upper <= mid || lower >= mid) {
+        return 2;
+    }
+    return 0;
+}
+
+#[test]
+fn test_volatility_and_correlation() -> int {
+    let rets_x: [float; 5] = [0.01, 0.02, -0.01, 0.03, -0.02];
+    let rets_y: [float; 5] = [0.012, 0.019, -0.009, 0.028, -0.022];
+    let vol: float = ts_volatility(&rets_x[0], 5);
+    if (vol < 0.015 || vol > 0.025) {
+        return 1;
+    }
+    let corr: float = ts_correlation(&rets_x[0], &rets_y[0], 5);
+    if (corr < 0.95 || corr > 1.01) {
+        return 2;
+    }
+    return 0;
+}

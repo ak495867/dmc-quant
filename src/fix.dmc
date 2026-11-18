@@ -1,0 +1,123 @@
+c_code {
+typedef struct {
+    int tag;
+    char val[128];
+} C_FixTag;
+
+typedef struct {
+    C_FixTag tags[64];
+    int count;
+    char raw[2048];
+} C_FixMessage;
+
+static int fix_calc_checksum(const char* buf, int len) {
+    int sum = 0;
+    for (int i = 0; i < len; i = i + 1) {
+        sum = sum + (unsigned char)buf[i];
+    }
+    return sum % 256;
+}
+}
+
+fn fix_soh() -> string {
+    return "\x01";
+}
+
+fn fix_format_tag(tag: int, val: string) -> string {
+    return text_from_int(tag) + "=" + val + fix_soh();
+}
+
+fn fix_build_new_order_single(cl_ord_id: string, symbol: string, side: int, price: float, qty: int, sender: string, target: string) -> string {
+    let s: string = fix_soh();
+    var body: string = "35=D" + s + "49=" + sender + s + "56=" + target + s + "11=" + cl_ord_id + s + "55=" + symbol + s + "54=" + text_from_int(side) + s + "38=" + text_from_int(qty) + s + "44=" + text_from_float(price) + s + "40=2" + s;
+    let body_len: int = text_len(body);
+    var header: string = "8=FIX.4.4" + s + "9=" + text_from_int(body_len) + s;
+    var full_without_cs: string = header + body;
+    var cs_str: string = "";
+    c_code {
+        int cs = fix_calc_checksum(full_without_cs, strlen(full_without_cs));
+        char cs_buf[16];
+        snprintf(cs_buf, sizeof(cs_buf), "10=%03d\x01", cs);
+        cs_str = strdup(cs_buf);
+    }
+    return full_without_cs + cs_str;
+}
+
+fn fix_build_execution_report(order_id: string, exec_id: string, symbol: string, side: int, last_px: float, last_qty: int, sender: string, target: string) -> string {
+    let s: string = fix_soh();
+    var body: string = "35=8" + s + "49=" + sender + s + "56=" + target + s + "37=" + order_id + s + "17=" + exec_id + s + "39=2" + s + "55=" + symbol + s + "54=" + text_from_int(side) + s + "31=" + text_from_float(last_px) + s + "32=" + text_from_int(last_qty) + s;
+    let body_len: int = text_len(body);
+    var header: string = "8=FIX.4.4" + s + "9=" + text_from_int(body_len) + s;
+    var full_without_cs: string = header + body;
+    var cs_str: string = "";
+    c_code {
+        int cs = fix_calc_checksum(full_without_cs, strlen(full_without_cs));
+        char cs_buf[16];
+        snprintf(cs_buf, sizeof(cs_buf), "10=%03d\x01", cs);
+        cs_str = strdup(cs_buf);
+    }
+    return full_without_cs + cs_str;
+}
+
+fn fix_get_field(raw_msg: string, tag: int) -> string {
+    var found_val: string = "";
+    c_code {
+        char tag_buf[32];
+        snprintf(tag_buf, sizeof(tag_buf), "%d=", tag);
+        const char* p = strstr(raw_msg, tag_buf);
+        if (p) {
+            const char* val_start = p + strlen(tag_buf);
+            const char* end = strchr(val_start, 1);
+            if (end) {
+                int len = (int)(end - val_start);
+                char* buf = (char*)malloc(len + 1);
+                memcpy(buf, val_start, len);
+                buf[len] = 0;
+                found_val = buf;
+            }
+        }
+    }
+    return found_val;
+}
+
+fn fix_validate_checksum(raw_msg: string) -> int {
+    var valid: int = 0;
+    c_code {
+        const char* p = strstr(raw_msg, "10=");
+        if (p) {
+            int body_len = (int)(p - raw_msg);
+            int calc_cs = fix_calc_checksum(raw_msg, body_len);
+            int recv_cs = atoi(p + 3);
+            if (calc_cs == recv_cs) valid = 1;
+        }
+    }
+    return valid;
+}
+
+fn itch_encode_add_order(order_ref: int, side: int, shares: int, stock: string, price: int) -> string {
+    var packet: string = "";
+    c_code {
+        char buf[64];
+        char side_char = (side == 1) ? 'B' : 'S';
+        snprintf(buf, sizeof(buf), "A:%d:%c:%d:%s:%d", order_ref, side_char, shares, stock, price);
+        packet = strdup(buf);
+    }
+    return packet;
+}
+
+fn itch_encode_order_executed(order_ref: int, shares: int, match_number: int) -> string {
+    var packet: string = "";
+    c_code {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "E:%d:%d:%d", order_ref, shares, match_number);
+        packet = strdup(buf);
+    }
+    return packet;
+}
+
+fn itch_decode_type(packet: string) -> string {
+    if (text_len(packet) > 0) {
+        return text_sub(packet, 0, 1);
+    }
+    return "";
+}

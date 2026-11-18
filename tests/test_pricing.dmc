@@ -1,0 +1,75 @@
+import "../src/pricing";
+
+#[test]
+fn test_black_scholes_call_and_put() -> int {
+    let call_px: float = bs_call(100.0, 100.0, 1.0, 0.05, 0.20);
+    if (call_px < 10.40 || call_px > 10.55) {
+        return 1;
+    }
+    let put_px: float = bs_put(100.0, 100.0, 1.0, 0.05, 0.20);
+    if (put_px < 5.50 || put_px > 5.65) {
+        return 2;
+    }
+    let parity_diff: float = (call_px - put_px) - (100.0 - 100.0 * 0.951229);
+    if (parity_diff < -0.2 || parity_diff > 0.2) {
+        return 3;
+    }
+    return 0;
+}
+
+#[test]
+fn test_greeks() -> int {
+    let delta_c: float = bs_delta_call(100.0, 100.0, 1.0, 0.05, 0.20);
+    if (delta_c < 0.60 || delta_c > 0.68) {
+        return 1;
+    }
+    let delta_p: float = bs_delta_put(100.0, 100.0, 1.0, 0.05, 0.20);
+    if (delta_p < -0.40 || delta_p > -0.32) {
+        return 2;
+    }
+    let gamma: float = bs_gamma(100.0, 100.0, 1.0, 0.05, 0.20);
+    if (gamma < 0.015 || gamma > 0.025) {
+        return 3;
+    }
+    let vega: float = bs_vega(100.0, 100.0, 1.0, 0.05, 0.20);
+    if (vega < 36.0 || vega > 40.0) {
+        return 4;
+    }
+    return 0;
+}
+
+#[test]
+fn test_implied_vol_and_monte_carlo() -> int {
+    let known_px: float = bs_call(100.0, 100.0, 1.0, 0.05, 0.25);
+    let recovered_iv: float = bs_implied_vol(100.0, 100.0, 1.0, 0.05, known_px, 1);
+    if (recovered_iv < 0.24 || recovered_iv > 0.26) {
+        return 1;
+    }
+    let mc_px: float = bs_monte_carlo(100.0, 100.0, 1.0, 0.05, 0.20, 10000, 1);
+    if (mc_px < 9.5 || mc_px > 11.5) {
+        return 2;
+    }
+    return 0;
+}
+
+#[test]
+fn test_simd_option_payoff() -> int {
+    let payoffs: f32x8 = bs_simd_call_payoff8(90.0, 95.0, 100.0, 105.0, 110.0, 115.0, 120.0, 125.0, 100.0);
+    let p0: float = f32x8_get(payoffs, 0);
+    let p3: float = f32x8_get(payoffs, 3);
+    let p7: float = f32x8_get(payoffs, 7);
+    if (p0 != 0.0) {
+        return 1;
+    }
+    if (p3 < 4.9 || p3 > 5.1) {
+        return 2;
+    }
+    if (p7 < 24.9 || p7 > 25.1) {
+        return 3;
+    }
+    let sum_payoffs: float = f32x8_sum(payoffs);
+    if (sum_payoffs < 74.0 || sum_payoffs > 76.0) {
+        return 4;
+    }
+    return 0;
+}

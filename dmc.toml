@@ -1,0 +1,13 @@
+[package]
+name = "dmc-quant"
+version = "1.0.0"
+description = "High-Throughput Quantitative Finance & Low-Latency Algorithmic Trading Monorepo for Demonic C"
+author = "ak495867"
+license = "MIT"
+repository = "https://github.com/ak495867/dmc-quant.git"
+
+[build]
+type = "library"
+output = "lib/libdmc_quant"
+
+[dependencies]

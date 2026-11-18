@@ -1,0 +1,75 @@
+import "../src/lob";
+
+#[test]
+fn test_lob_bbo_and_spread() -> int {
+    let b: int = lob_create(0);
+    lob_add_limit(b, 101, 1, 10050, 100);
+    lob_add_limit(b, 102, 1, 10075, 200);
+    lob_add_limit(b, 103, 2, 10125, 150);
+    lob_add_limit(b, 104, 2, 10150, 300);
+
+    let bb: int = lob_best_bid(b);
+    let ba: int = lob_best_ask(b);
+    if (bb != 10075) {
+        return 1;
+    }
+    if (ba != 10125) {
+        return 2;
+    }
+    let sp: int = lob_spread(b);
+    if (sp != 50) {
+        return 3;
+    }
+    let mid: int = lob_mid_price(b);
+    if (mid != 10100) {
+        return 4;
+    }
+    return 0;
+}
+
+#[test]
+fn test_lob_matching_and_depth() -> int {
+    let b: int = lob_create(1);
+    lob_add_limit(b, 201, 2, 5000, 100);
+    let match_qty: int = lob_add_limit(b, 202, 1, 5000, 60);
+    if (match_qty != 60) {
+        return 1;
+    }
+    let ask_depth: int = lob_depth_qty(b, 2);
+    if (ask_depth != 40) {
+        return 2;
+    }
+    let last_p: int = lob_last_price(b);
+    if (last_p != 5000) {
+        return 3;
+    }
+    return 0;
+}
+
+#[test]
+fn test_lob_market_order_and_cancel() -> int {
+    let b: int = lob_create(2);
+    lob_add_limit(b, 301, 2, 2000, 50);
+    lob_add_limit(b, 302, 2, 2010, 50);
+    let fill: int = lob_add_market(b, 1, 75);
+    if (fill != 75) {
+        return 1;
+    }
+    let ba: int = lob_best_ask(b);
+    if (ba != 2010) {
+        return 2;
+    }
+    let remaining_ask: int = lob_depth_qty(b, 2);
+    if (remaining_ask != 25) {
+        return 3;
+    }
+    let cancelled: int = lob_cancel(b, 302);
+    if (cancelled != 25) {
+        return 4;
+    }
+    let after_cancel_ask: int = lob_best_ask(b);
+    if (after_cancel_ask != 0) {
+        return 5;
+    }
+    return 0;
+}

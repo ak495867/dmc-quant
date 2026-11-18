@@ -1,0 +1,49 @@
+import "../src/risk";
+
+#[test]
+fn test_var_and_cvar() -> int {
+    let rets: [float; 10] = [-0.05, -0.04, -0.02, -0.01, 0.00, 0.01, 0.02, 0.03, 0.04, 0.05];
+    let hist_var: float = risk_historical_var(&rets[0], 10, 0.90);
+    if (hist_var < 0.035 || hist_var > 0.055) {
+        return 1;
+    }
+    let cvar: float = risk_cvar(&rets[0], 10, 0.90);
+    if (cvar < 0.04 || cvar > 0.06) {
+        return 2;
+    }
+    let param_var: float = risk_parametric_var(1000000.0, 0.02, 0.95);
+    if (param_var < 30000.0 || param_var > 35000.0) {
+        return 3;
+    }
+    return 0;
+}
+
+#[test]
+fn test_sharpe_and_sortino() -> int {
+    let sharpe: float = risk_sharpe_ratio(0.12, 0.02, 0.15);
+    if (sharpe < 0.65 || sharpe > 0.68) {
+        return 1;
+    }
+    let rets: [float; 6] = [0.05, -0.02, 0.04, -0.01, 0.06, 0.03];
+    let sortino: float = risk_sortino_ratio(&rets[0], 6, 0.0);
+    if (sortino < 1.5 || sortino > 3.0) {
+        return 2;
+    }
+    return 0;
+}
+
+#[test]
+fn test_max_drawdown_and_beta() -> int {
+    let equity: [float; 7] = [100.0, 120.0, 110.0, 90.0, 105.0, 130.0, 125.0];
+    let mdd: float = risk_max_drawdown(&equity[0], 7);
+    if (mdd < 0.24 || mdd > 0.26) {
+        return 1;
+    }
+    let asset_r: [float; 5] = [0.02, 0.04, -0.02, 0.06, -0.04];
+    let mkt_r: [float; 5] = [0.01, 0.02, -0.01, 0.03, -0.02];
+    let beta: float = risk_beta(&asset_r[0], &mkt_r[0], 5);
+    if (beta < 1.9 || beta > 2.1) {
+        return 2;
+    }
+    return 0;
+}

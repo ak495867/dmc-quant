@@ -1,0 +1,150 @@
+c_code {
+static int quant_cmp_float(const void* a, const void* b) {
+    float fa = *(const float*)a;
+    float fb = *(const float*)b;
+    if (fa < fb) return -1;
+    if (fa > fb) return 1;
+    return 0;
+}
+
+static double quant_normal_inv(double p) {
+    if (p <= 0.0) return -4.0;
+    if (p >= 1.0) return 4.0;
+    if (fabs(p - 0.95) < 0.01) return 1.644853;
+    if (fabs(p - 0.99) < 0.005) return 2.326348;
+    if (fabs(p - 0.90) < 0.01) return 1.281552;
+    return 1.644853;
+}
+}
+
+fn risk_parametric_var(portfolio_value: float, vol: float, confidence: float) -> float {
+    var v: float = 0.0;
+    c_code {
+        double z = quant_normal_inv(confidence);
+        v = (float)(portfolio_value * z * vol);
+    }
+    return v;
+}
+
+fn risk_historical_var(returns: *float, count: int, confidence: float) -> float {
+    var var_val: float = 0.0;
+    c_code {
+        if (returns && count > 0) {
+            float* sorted = (float*)malloc(count * sizeof(float));
+            for (int i = 0; i < count; i = i + 1) sorted[i] = returns[i];
+            qsort(sorted, count, sizeof(float), quant_cmp_float);
+            double alpha = 1.0 - confidence;
+            int idx = (int)(alpha * count);
+            if (idx >= count) idx = count - 1;
+            if (idx < 0) idx = 0;
+            var_val = (sorted[idx] < 0.0) ? -sorted[idx] : 0.0;
+            free(sorted);
+        }
+    }
+    return var_val;
+}
+
+fn risk_cvar(returns: *float, count: int, confidence: float) -> float {
+    var cvar_val: float = 0.0;
+    c_code {
+        if (returns && count > 0) {
+            float* sorted = (float*)malloc(count * sizeof(float));
+            for (int i = 0; i < count; i = i + 1) sorted[i] = returns[i];
+            qsort(sorted, count, sizeof(float), quant_cmp_float);
+            double alpha = 1.0 - confidence;
+            int cutoff = (int)(alpha * count);
+            if (cutoff <= 0) cutoff = 1;
+            if (cutoff > count) cutoff = count;
+            double sum_loss = 0.0;
+            for (int i = 0; i < cutoff; i = i + 1) {
+                sum_loss = sum_loss + ((sorted[i] < 0.0) ? -sorted[i] : 0.0);
+            }
+            cvar_val = (float)(sum_loss / cutoff);
+            free(sorted);
+        }
+    }
+    return cvar_val;
+}
+
+fn risk_sharpe_ratio(mean_return: float, risk_free_rate: float, vol: float) -> float {
+    if (vol <= 0.0) {
+        return 0.0;
+    }
+    return (mean_return - risk_free_rate) / vol;
+}
+
+fn risk_sortino_ratio(returns: *float, count: int, target_return: float) -> float {
+    var sortino: float = 0.0;
+    c_code {
+        if (returns && count > 1) {
+            double sum = 0.0;
+            for (int i = 0; i < count; i = i + 1) sum = sum + returns[i];
+            double mean = sum / count;
+            double downside_sq = 0.0;
+            for (int i = 0; i < count; i = i + 1) {
+                double diff = returns[i] - target_return;
+                if (diff < 0.0) {
+                    downside_sq = downside_sq + diff * diff;
+                }
+            }
+            double downside_dev = sqrt(downside_sq / count);
+            if (downside_dev > 1e-9) {
+                sortino = (float)((mean - target_return) / downside_dev);
+            }
+        }
+    }
+    return sortino;
+}
+
+fn risk_max_drawdown(equity_curve: *float, count: int) -> float {
+    var mdd: float = 0.0;
+    c_code {
+        if (equity_curve && count > 1) {
+            double peak = equity_curve[0];
+            double max_dd = 0.0;
+            for (int i = 1; i < count; i = i + 1) {
+                if (equity_curve[i] > peak) {
+                    peak = equity_curve[i];
+                } else if (peak > 0.0) {
+                    double dd = (peak - equity_curve[i]) / peak;
+                    if (dd > max_dd) max_dd = dd;
+                }
+            }
+            mdd = (float)max_dd;
+        }
+    }
+    return mdd;
+}
+
+fn risk_calmar_ratio(cagr: float, max_drawdown: float) -> float {
+    if (max_drawdown <= 0.0) {
+        return 0.0;
+    }
+    return cagr / max_drawdown;
+}
+
+fn risk_beta(asset_returns: *float, market_returns: *float, count: int) -> float {
+    var beta: float = 1.0;
+    c_code {
+        if (asset_returns && market_returns && count > 1) {
+            double sa = 0.0, sm = 0.0;
+            for (int i = 0; i < count; i = i + 1) {
+                sa = sa + asset_returns[i];
+                sm = sm + market_returns[i];
+            }
+            double ma = sa / count;
+            double mm = sm / count;
+            double cov = 0.0, var_m = 0.0;
+            for (int i = 0; i < count; i = i + 1) {
+                double da = asset_returns[i] - ma;
+                double dm = market_returns[i] - mm;
+                cov = cov + da * dm;
+                var_m = var_m + dm * dm;
+            }
+            if (var_m > 1e-9) {
+                beta = (float)(cov / var_m);
+            }
+        }
+    }
+    return beta;
+}
