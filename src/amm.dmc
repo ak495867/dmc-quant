@@ -1,0 +1,86 @@
+fn amm_spot_price(reserve_in: float, reserve_out: float) -> float {
+    if (reserve_in <= 0.0) {
+        return 0.0;
+    }
+    return reserve_out / reserve_in;
+}
+
+fn amm_get_amount_out(amount_in: float, reserve_in: float, reserve_out: float, fee_bps: int) -> float {
+    var out_amt: float = 0.0;
+    c_code {
+        if (amount_in > 0.0 && reserve_in > 0.0 && reserve_out > 0.0 && fee_bps >= 0 && fee_bps < 10000) {
+            double fee_multiplier = 10000.0 - fee_bps;
+            double amt_with_fee = amount_in * fee_multiplier;
+            double num = amt_with_fee * reserve_out;
+            double den = reserve_in * 10000.0 + amt_with_fee;
+            if (den > 1e-9) {
+                out_amt = (float)(num / den);
+            }
+        }
+    }
+    return out_amt;
+}
+
+fn amm_get_amount_in(amount_out: float, reserve_in: float, reserve_out: float, fee_bps: int) -> float {
+    var in_amt: float = 0.0;
+    c_code {
+        if (amount_out > 0.0 && reserve_in > 0.0 && reserve_out > amount_out && fee_bps >= 0 && fee_bps < 10000) {
+            double fee_multiplier = 10000.0 - fee_bps;
+            double num = (double)reserve_in * (double)amount_out * 10000.0;
+            double den = ((double)reserve_out - (double)amount_out) * fee_multiplier;
+            if (den > 1e-9) {
+                in_amt = (float)(num / den);
+            }
+        }
+    }
+    return in_amt;
+}
+
+fn amm_slippage_bps(amount_in: float, reserve_in: float, reserve_out: float, fee_bps: int) -> float {
+    let out_amt: float = amm_get_amount_out(amount_in, reserve_in, reserve_out, fee_bps);
+    if (amount_in <= 0.0 || reserve_in <= 0.0 || reserve_out <= 0.0 || out_amt <= 0.0) {
+        return 0.0;
+    }
+    let spot_p: float = amm_spot_price(reserve_in, reserve_out);
+    let exec_p: float = out_amt / amount_in;
+    if (spot_p <= 0.0) {
+        return 0.0;
+    }
+    let diff: float = spot_p - exec_p;
+    return (diff / spot_p) * 10000.0;
+}
+
+fn amm_impermanent_loss(price_ratio: float) -> float {
+    var il: float = 0.0;
+    c_code {
+        if (price_ratio > 0.0) {
+            double k = (double)price_ratio;
+            double sqrt_k = sqrt(k);
+            il = (float)(2.0 * sqrt_k / (1.0 + k) - 1.0);
+        }
+    }
+    return il;
+}
+
+fn amm_optimal_arbitrage_input(r1_in: float, r1_out: float, r2_in: float, r2_out: float, fee_bps: int) -> float {
+    var opt_in: float = 0.0;
+    c_code {
+        if (r1_in > 0.0 && r1_out > 0.0 && r2_in > 0.0 && r2_out > 0.0) {
+            double gamma = (10000.0 - fee_bps) / 10000.0;
+            double num = sqrt(r1_out * r2_out * gamma * gamma * r1_in * r2_in) - r1_in * r2_in;
+            double den = r2_in + r1_out * gamma;
+            if (num > 0.0 && den > 1e-9) {
+                opt_in = (float)(num / den);
+            }
+        }
+    }
+    return opt_in;
+}
+
+fn amm_tick_to_price(tick: int) -> float {
+    var px: float = 1.0;
+    c_code {
+        px = (float)pow(1.0001, (double)tick);
+    }
+    return px;
+}

@@ -7,3 +7,6 @@ import "portfolio";
 import "execution";
 import "ml_factors";
 import "simd_matrix";
+import "fixed_income";
+import "microstructure";
+import "amm";

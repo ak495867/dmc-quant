@@ -1,0 +1,130 @@
+c_code {
+static double fi_c_bond_price(double face, double coupon, double ytm, double years, int freq) {
+    if (years <= 0.0 || freq <= 0 || face <= 0.0) return face;
+    int n = (int)(years * freq);
+    double c = (face * coupon) / freq;
+    double y = ytm / freq;
+    double pv = 0.0;
+    double df = 1.0;
+    for (int t = 1; t <= n; t = t + 1) {
+        df = df / (1.0 + y);
+        pv = pv + c * df;
+    }
+    pv = pv + face * df;
+    return pv;
+}
+}
+
+fn fi_bond_price(face_value: float, coupon_rate: float, ytm: float, years: float, freq: int) -> float {
+    var p: float = 0.0;
+    c_code {
+        p = (float)fi_c_bond_price((double)face_value, (double)coupon_rate, (double)ytm, (double)years, freq);
+    }
+    return p;
+}
+
+fn fi_bond_ytm(face_value: float, coupon_rate: float, market_price: float, years: float, freq: int) -> float {
+    var ytm: float = 0.05;
+    c_code {
+        if (market_price > 0.0 && years > 0.0 && freq > 0) {
+            double y = coupon_rate > 0.0 ? coupon_rate : 0.05;
+            for (int iter = 0; iter < 64; iter = iter + 1) {
+                double p = fi_c_bond_price((double)face_value, (double)coupon_rate, y, (double)years, freq);
+                double diff = p - market_price;
+                if (fabs(diff) < 1e-5) break;
+                double dy = 0.0001;
+                double p_up = fi_c_bond_price((double)face_value, (double)coupon_rate, y + dy, (double)years, freq);
+                double dp = (p_up - p) / dy;
+                if (fabs(dp) < 1e-8) break;
+                y = y - diff / dp;
+                if (y < 0.0001) y = 0.0001;
+                if (y > 2.0) y = 2.0;
+            }
+            ytm = (float)y;
+        }
+    }
+    return ytm;
+}
+
+fn fi_macaulay_duration(face_value: float, coupon_rate: float, ytm: float, years: float, freq: int) -> float {
+    var dur: float = 0.0;
+    c_code {
+        if (years > 0.0 && freq > 0 && face_value > 0.0) {
+            int n = (int)(years * freq);
+            double c = (face_value * coupon_rate) / freq;
+            double y = ytm / freq;
+            double p = fi_c_bond_price((double)face_value, (double)coupon_rate, (double)ytm, (double)years, freq);
+            if (p > 1e-9) {
+                double weighted_cf = 0.0;
+                double df = 1.0;
+                for (int t = 1; t <= n; t = t + 1) {
+                    df = df / (1.0 + y);
+                    double time_years = (double)t / freq;
+                    weighted_cf = weighted_cf + time_years * c * df;
+                }
+                weighted_cf = weighted_cf + years * face_value * df;
+                dur = (float)(weighted_cf / p);
+            }
+        }
+    }
+    return dur;
+}
+
+fn fi_modified_duration(face_value: float, coupon_rate: float, ytm: float, years: float, freq: int) -> float {
+    let mac: float = fi_macaulay_duration(face_value, coupon_rate, ytm, years, freq);
+    if (freq > 0) {
+        let denom: float = 1.0 + (ytm / (freq as float));
+        if (denom > 0.00001) {
+            return mac / denom;
+        }
+    }
+    return mac;
+}
+
+fn fi_bond_convexity(face_value: float, coupon_rate: float, ytm: float, years: float, freq: int) -> float {
+    var conv: float = 0.0;
+    c_code {
+        if (years > 0.0 && freq > 0 && face_value > 0.0) {
+            int n = (int)(years * freq);
+            double c = (face_value * coupon_rate) / freq;
+            double y = ytm / freq;
+            double p = fi_c_bond_price((double)face_value, (double)coupon_rate, (double)ytm, (double)years, freq);
+            if (p > 1e-9) {
+                double cf_sum = 0.0;
+                double df = 1.0;
+                for (int t = 1; t <= n; t = t + 1) {
+                    df = df / (1.0 + y);
+                    cf_sum = cf_sum + (double)t * (t + 1) * c * df;
+                }
+                cf_sum = cf_sum + (double)n * (n + 1) * face_value * df;
+                double denom = p * (1.0 + y) * (1.0 + y) * freq * freq;
+                if (denom > 1e-9) {
+                    conv = (float)(cf_sum / denom);
+                }
+            }
+        }
+    }
+    return conv;
+}
+
+fn fi_dv01(face_value: float, coupon_rate: float, ytm: float, years: float, freq: int) -> float {
+    let p: float = fi_bond_price(face_value, coupon_rate, ytm, years, freq);
+    let mod_dur: float = fi_modified_duration(face_value, coupon_rate, ytm, years, freq);
+    return mod_dur * p * 0.0001;
+}
+
+fn fi_discount_factor(zero_rate: float, maturity: float) -> float {
+    var df: float = 1.0;
+    c_code {
+        df = (float)exp(-((double)zero_rate * (double)maturity));
+    }
+    return df;
+}
+
+fn fi_forward_rate(spot1: float, t1: float, spot2: float, t2: float) -> float {
+    if (t2 <= t1) {
+        return spot2;
+    }
+    let dt: float = t2 - t1;
+    return (spot2 * t2 - spot1 * t1) / dt;
+}

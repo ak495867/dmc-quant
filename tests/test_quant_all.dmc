@@ -49,5 +49,21 @@ fn test_quant_end_to_end_pipeline() -> int {
     if (dot < 7.9 || dot > 8.1) {
         return 8;
     }
+
+    let bond_px: float = fi_bond_price(100.0, 0.05, 0.05, 10.0, 2);
+    if (bond_px < 99.9 || bond_px > 100.1) {
+        return 9;
+    }
+
+    let mp: float = micro_price(100.0, 101.0, 50, 50);
+    if (mp < 100.49 || mp > 100.51) {
+        return 10;
+    }
+
+    let amm_out: float = amm_get_amount_out(10.0, 1000.0, 1000.0, 30);
+    if (amm_out < 9.5 || amm_out > 10.0) {
+        return 11;
+    }
+
     return 0;
 }

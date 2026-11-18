@@ -1,0 +1,117 @@
+fn micro_order_book_imbalance(bid_qty: int, ask_qty: int) -> float {
+    let denom: int = bid_qty + ask_qty;
+    if (denom <= 0) {
+        return 0.0;
+    }
+    let diff: int = bid_qty - ask_qty;
+    return (diff as float) / (denom as float);
+}
+
+fn micro_price(bid_price: float, ask_price: float, bid_qty: int, ask_qty: int) -> float {
+    let denom: int = bid_qty + ask_qty;
+    if (denom <= 0) {
+        return (bid_price + ask_price) / 2.0;
+    }
+    var mp: float = 0.0;
+    c_code {
+        double total_q = (double)denom;
+        mp = (float)((bid_price * (double)ask_qty + ask_price * (double)bid_qty) / total_q);
+    }
+    return mp;
+}
+
+fn micro_vpin(buy_volume_buckets: *float, sell_volume_buckets: *float, num_buckets: int, bucket_size: float) -> float {
+    var vpin: float = 0.0;
+    c_code {
+        if (buy_volume_buckets && sell_volume_buckets && num_buckets > 0 && bucket_size > 1e-7) {
+            double total_imbalance = 0.0;
+            for (int i = 0; i < num_buckets; i = i + 1) {
+                double diff = buy_volume_buckets[i] - sell_volume_buckets[i];
+                total_imbalance = total_imbalance + fabs(diff);
+            }
+            vpin = (float)(total_imbalance / (num_buckets * bucket_size));
+        }
+    }
+    return vpin;
+}
+
+fn micro_kyles_lambda(price_changes: *float, signed_order_flows: *float, count: int) -> float {
+    var lambda_val: float = 0.0;
+    c_code {
+        if (price_changes && signed_order_flows && count > 1) {
+            double sp = 0.0, sq = 0.0;
+            for (int i = 0; i < count; i = i + 1) {
+                sp = sp + price_changes[i];
+                sq = sq + signed_order_flows[i];
+            }
+            double mp = sp / count;
+            double mq = sq / count;
+            double cov = 0.0, var_q = 0.0;
+            for (int i = 0; i < count; i = i + 1) {
+                double dp = price_changes[i] - mp;
+                double dq = signed_order_flows[i] - mq;
+                cov = cov + dp * dq;
+                var_q = var_q + dq * dq;
+            }
+            if (var_q > 1e-9) {
+                lambda_val = (float)(cov / var_q);
+            }
+        }
+    }
+    return lambda_val;
+}
+
+fn micro_amihud_illiquidity(returns: *float, volumes_dollar: *float, count: int) -> float {
+    var illiq: float = 0.0;
+    c_code {
+        if (returns && volumes_dollar && count > 0) {
+            double sum_ratio = 0.0;
+            int valid_count = 0;
+            for (int i = 0; i < count; i = i + 1) {
+                if (volumes_dollar[i] > 1e-5) {
+                    double r = fabs((double)returns[i]);
+                    sum_ratio = sum_ratio + (r / volumes_dollar[i]);
+                    valid_count = valid_count + 1;
+                }
+            }
+            if (valid_count > 0) {
+                illiq = (float)(sum_ratio / valid_count);
+            }
+        }
+    }
+    return illiq;
+}
+
+fn micro_roll_spread(price_changes: *float, count: int) -> float {
+    var spread: float = 0.0;
+    c_code {
+        if (price_changes && count > 2) {
+            int n = count - 1;
+            double s1 = 0.0, s2 = 0.0;
+            for (int i = 0; i < n; i = i + 1) {
+                s1 = s1 + price_changes[i];
+                s2 = s2 + price_changes[i + 1];
+            }
+            double m1 = s1 / n;
+            double m2 = s2 / n;
+            double cov = 0.0;
+            for (int i = 0; i < n; i = i + 1) {
+                cov = cov + (price_changes[i] - m1) * (price_changes[i + 1] - m2);
+            }
+            cov = cov / n;
+            if (cov < 0.0) {
+                spread = (float)(2.0 * sqrt(-cov));
+            }
+        }
+    }
+    return spread;
+}
+
+fn micro_realized_spread(trade_price: float, mid_t: float, mid_future: float, side: int) -> float {
+    var rs: float = 0.0;
+    c_code {
+        double sign = (side == 1) ? 1.0 : -1.0;
+        rs = (float)(2.0 * sign * ((double)trade_price - (double)mid_future));
+    }
+    return rs;
+}

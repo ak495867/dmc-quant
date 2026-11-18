@@ -1,0 +1,98 @@
+import "../src/dmc_quant";
+
+fn main() -> int {
+    println("================================================================================");
+    println("                    DEMONIC C HIGH-FREQUENCY QUANT DESK DEMO                    ");
+    println("================================================================================");
+
+    let book: int = lob_create(0);
+    lob_add_limit(book, 1001, 1, 18500, 200);
+    lob_add_limit(book, 1002, 1, 18490, 500);
+    lob_add_limit(book, 1003, 2, 18520, 300);
+    lob_add_limit(book, 1004, 2, 18530, 400);
+
+    let bb: int = lob_best_bid(book);
+    let ba: int = lob_best_ask(book);
+    let bid_px: float = (bb as float) / 100.0;
+    let ask_px: float = (ba as float) / 100.0;
+    let sp: int = lob_spread(book);
+    let spread_px: float = (sp as float) / 100.0;
+    let mid_px: float = ((bb + ba) as float) / 200.0;
+
+    let b_depth: int = lob_depth_qty(book, 1);
+    let a_depth: int = lob_depth_qty(book, 2);
+    let obi: float = micro_order_book_imbalance(b_depth, a_depth);
+    let mp: float = micro_price(bid_px, ask_px, b_depth, a_depth);
+
+    c_code {
+        printf("[1] Central Limit Order Book & Microstructure (AAPL):\n");
+        printf("    Best Bid:      $%.2f (qty: %d)\n", (double)bid_px, b_depth);
+        printf("    Best Ask:      $%.2f (qty: %d)\n", (double)ask_px, a_depth);
+        printf("    Spread:        $%.2f | Mid-Price: $%.2f\n", (double)spread_px, (double)mid_px);
+        printf("    Order Imbalance (OBI): %.3f | Micro-Price: $%.2f\n\n", (double)obi, (double)mp);
+    }
+
+    let call_px: float = bs_call(mid_px, 185.0, 0.25, 0.05, 0.22);
+    let delta: float = bs_delta_call(mid_px, 185.0, 0.25, 0.05, 0.22);
+    let gamma: float = bs_gamma(mid_px, 185.0, 0.25, 0.05, 0.22);
+    let vega: float = bs_vega(mid_px, 185.0, 0.25, 0.05, 0.22);
+
+    c_code {
+        printf("[2] Derivative Pricing & Greeks (AAPL 185C, 3M Expiry):\n");
+        printf("    Call Option:   $%.2f\n", (double)call_px);
+        printf("    Delta:         %.4f | Gamma: %.4f | Vega: %.4f\n\n", (double)delta, (double)gamma, (double)vega);
+    }
+
+    let total_order_qty: int = 1000;
+    let twap_slice: int = exec_twap_slice(total_order_qty, 5, 0);
+    let fix_order: string = fix_build_new_order_single("TWAP_ORD_1", "AAPL", 1, ask_px, twap_slice, "QUANT_DESK", "NASDAQ");
+
+    c_code {
+        printf("[3] Algorithmic Execution & FIX Protocol:\n");
+        printf("    Parent Order:  %d shares -> Slice 1/5: %d shares\n", total_order_qty, twap_slice);
+        printf("    FIX 4.4 Msg:   %s\n", fix_order);
+    }
+
+    let match_fill: int = lob_add_market(book, 1, twap_slice);
+    let last_p: int = lob_last_price(book);
+    let exec_px: float = (last_p as float) / 100.0;
+    let slippage_bps: float = exec_slippage_bps(ask_px, exec_px, 1);
+
+    c_code {
+        printf("    Market Match:  Filled %d shares @ $%.2f (Slippage: %.2f bps)\n\n", match_fill, (double)exec_px, (double)slippage_bps);
+    }
+
+    let dex_out: float = amm_get_amount_out(100.0, 50000.0, 9250000.0, 30);
+    let dex_price: float = dex_out / 100.0;
+
+    c_code {
+        printf("[4] Decentralized Finance (AMM DEX vs CEX):\n");
+        printf("    DEX Reserve:   50,000 ETH / 9,250,000 USDC\n");
+        printf("    Swap 100 ETH:  Received %.2f USDC (Effective Px: $%.2f)\n\n", (double)dex_out, (double)dex_price);
+    }
+
+    let bond_price: float = fi_bond_price(100.0, 0.045, 0.042, 10.0, 2);
+    let bond_mod_dur: float = fi_modified_duration(100.0, 0.045, 0.042, 10.0, 2);
+    let bond_dv01: float = fi_dv01(100.0, 0.045, 0.042, 10.0, 2);
+
+    c_code {
+        printf("[5] Fixed Income & Rates (US 10Y Treasury):\n");
+        printf("    Clean Price:   $%.2f\n", (double)bond_price);
+        printf("    Mod Duration:  %.2f yrs | DV01: $%.4f\n\n", (double)bond_mod_dur, (double)bond_dv01);
+    }
+
+    var vols: [float; 2] = [0.22, 0.08];
+    var rp_weights: [float; 2] = [0.0, 0.0];
+    port_risk_parity_weights(&vols[0], 2, &rp_weights[0]);
+    let port_var: float = risk_parametric_var(1000000.0, 0.12, 0.95);
+
+    c_code {
+        printf("[6] Portfolio Engineering & Risk Management:\n");
+        printf("    Risk Parity:   Stock Weight: %.1f%% | Bond Weight: %.1f%%\n", (double)(rp_weights[0] * 100.0), (double)(rp_weights[1] * 100.0));
+        printf("    Portfolio VaR: $%.2f (95%% Daily, $1M Capital)\n", (double)port_var);
+        printf("================================================================================\n");
+        printf("                         ALL DESK OPERATIONS EXECUTED OK                        \n");
+        printf("================================================================================\n");
+    }
+    return 0;
+}

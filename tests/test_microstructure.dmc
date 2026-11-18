@@ -1,0 +1,54 @@
+import "../src/microstructure";
+
+#[test]
+fn test_order_book_imbalance_and_micro_price() -> int {
+    let obi: float = micro_order_book_imbalance(75, 25);
+    if (obi < 0.49 || obi > 0.51) {
+        return 1;
+    }
+    let mp: float = micro_price(100.0, 100.5, 80, 20);
+    if (mp < 100.39 || mp > 100.41) {
+        return 2;
+    }
+    return 0;
+}
+
+#[test]
+fn test_vpin_and_kyles_lambda() -> int {
+    var buys: [float; 3] = [60.0, 40.0, 70.0];
+    var sells: [float; 3] = [40.0, 60.0, 30.0];
+    let vpin: float = micro_vpin(&buys[0], &sells[0], 3, 100.0);
+    if (vpin < 0.25 || vpin > 0.28) {
+        return 1;
+    }
+
+    var dp: [float; 4] = [0.05, 0.10, -0.05, 0.0];
+    var q: [float; 4] = [50.0, 100.0, -50.0, 0.0];
+    let lambda_val: float = micro_kyles_lambda(&dp[0], &q[0], 4);
+    if (lambda_val < 0.0008 || lambda_val > 0.0012) {
+        return 2;
+    }
+    return 0;
+}
+
+#[test]
+fn test_amihud_roll_and_realized_spread() -> int {
+    var rets: [float; 2] = [0.01, 0.02];
+    var vols: [float; 2] = [100000.0, 200000.0];
+    let illiq: float = micro_amihud_illiquidity(&rets[0], &vols[0], 2);
+    if (illiq <= 0.0 || illiq > 0.001) {
+        return 1;
+    }
+
+    var p_changes: [float; 6] = [1.0, -1.0, 1.0, -1.0, 1.0, -1.0];
+    let roll: float = micro_roll_spread(&p_changes[0], 6);
+    if (roll < 1.0 || roll > 3.0) {
+        return 2;
+    }
+
+    let rs: float = micro_realized_spread(100.25, 100.15, 100.10, 1);
+    if (rs < 0.29 || rs > 0.31) {
+        return 3;
+    }
+    return 0;
+}

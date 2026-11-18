@@ -1,0 +1,52 @@
+import "../src/fixed_income";
+
+#[test]
+fn test_bond_price_and_ytm() -> int {
+    let par_px: float = fi_bond_price(100.0, 0.05, 0.05, 5.0, 2);
+    if (par_px < 99.9 || par_px > 100.1) {
+        return 1;
+    }
+    let recovered_ytm: float = fi_bond_ytm(100.0, 0.05, 100.0, 5.0, 2);
+    if (recovered_ytm < 0.049 || recovered_ytm > 0.051) {
+        return 2;
+    }
+    let discount_px: float = fi_bond_price(100.0, 0.04, 0.06, 10.0, 2);
+    if (discount_px < 80.0 || discount_px > 90.0) {
+        return 3;
+    }
+    return 0;
+}
+
+#[test]
+fn test_duration_convexity_and_dv01() -> int {
+    let mac_dur: float = fi_macaulay_duration(100.0, 0.05, 0.05, 5.0, 2);
+    if (mac_dur < 4.2 || mac_dur > 4.6) {
+        return 1;
+    }
+    let mod_dur: float = fi_modified_duration(100.0, 0.05, 0.05, 5.0, 2);
+    if (mod_dur < 4.1 || mod_dur > 4.5) {
+        return 2;
+    }
+    let conv: float = fi_bond_convexity(100.0, 0.05, 0.05, 5.0, 2);
+    if (conv < 15.0 || conv > 25.0) {
+        return 3;
+    }
+    let dv01: float = fi_dv01(100.0, 0.05, 0.05, 5.0, 2);
+    if (dv01 < 0.04 || dv01 > 0.05) {
+        return 4;
+    }
+    return 0;
+}
+
+#[test]
+fn test_discount_factor_and_forward_rate() -> int {
+    let df: float = fi_discount_factor(0.05, 2.0);
+    if (df < 0.90 || df > 0.91) {
+        return 1;
+    }
+    let fwd: float = fi_forward_rate(0.04, 1.0, 0.05, 2.0);
+    if (fwd < 0.059 || fwd > 0.061) {
+        return 2;
+    }
+    return 0;
+}

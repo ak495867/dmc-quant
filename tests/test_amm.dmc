@@ -1,0 +1,44 @@
+import "../src/amm";
+
+#[test]
+fn test_constant_product_pricing() -> int {
+    let spot: float = amm_spot_price(1000.0, 2000.0);
+    if (spot < 1.99 || spot > 2.01) {
+        return 1;
+    }
+
+    let out_amt: float = amm_get_amount_out(10.0, 1000.0, 2000.0, 30);
+    if (out_amt < 19.5 || out_amt > 19.9) {
+        return 2;
+    }
+
+    let in_amt: float = amm_get_amount_in(out_amt, 1000.0, 2000.0, 30);
+    if (in_amt < 9.9 || in_amt > 10.1) {
+        return 3;
+    }
+
+    let slip: float = amm_slippage_bps(10.0, 1000.0, 2000.0, 30);
+    if (slip < 100.0 || slip > 150.0) {
+        return 4;
+    }
+    return 0;
+}
+
+#[test]
+fn test_impermanent_loss_and_ticks() -> int {
+    let il_same: float = amm_impermanent_loss(1.0);
+    if (il_same < -0.001 || il_same > 0.001) {
+        return 1;
+    }
+
+    let il_move: float = amm_impermanent_loss(1.50);
+    if (il_move < -0.025 || il_move > -0.015) {
+        return 2;
+    }
+
+    let p0: float = amm_tick_to_price(0);
+    if (p0 < 0.999 || p0 > 1.001) {
+        return 3;
+    }
+    return 0;
+}
