@@ -31,5 +31,23 @@ fn test_quant_end_to_end_pipeline() -> int {
     if (pvar <= 0.0) {
         return 5;
     }
+
+    let slice_qty: int = exec_twap_slice(100, 5, 0);
+    if (slice_qty != 20) {
+        return 6;
+    }
+
+    var z_in: [float; 3] = [10.0, 20.0, 30.0];
+    var z_out: [float; 3] = [0.0, 0.0, 0.0];
+    let ok_z: int = factor_zscore(&z_in[0], 3, &z_out[0]);
+    if (ok_z != 1) {
+        return 7;
+    }
+
+    let va: f32x8 = f32x8(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
+    let dot: float = simd_vector_dot8(va, va);
+    if (dot < 7.9 || dot > 8.1) {
+        return 8;
+    }
     return 0;
 }

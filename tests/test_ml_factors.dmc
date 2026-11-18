@@ -1,0 +1,42 @@
+import "../src/ml_factors";
+
+#[test]
+fn test_zscore_and_winsorize() -> int {
+    var vals: [float; 3] = [10.0, 20.0, 30.0];
+    var z: [float; 3] = [0.0, 0.0, 0.0];
+    let ok_z: int = factor_zscore(&vals[0], 3, &z[0]);
+    if (ok_z != 1) {
+        return 1;
+    }
+    if (z[0] < -1.01 || z[0] > -0.99 || z[1] < -0.01 || z[1] > 0.01 || z[2] < 0.99 || z[2] > 1.01) {
+        return 2;
+    }
+
+    var w_vals: [float; 5] = [1.0, 10.0, 20.0, 30.0, 100.0];
+    var out_w: [float; 5] = [0.0, 0.0, 0.0, 0.0, 0.0];
+    let ok_win: int = factor_winsorize(&w_vals[0], 5, 0.20, 0.60, &out_w[0]);
+    if (ok_win != 1) {
+        return 3;
+    }
+    if (out_w[0] < 9.9 || out_w[0] > 10.1 || out_w[4] < 29.9 || out_w[4] > 30.1) {
+        return 4;
+    }
+    return 0;
+}
+
+#[test]
+fn test_ic_and_ou_halflife() -> int {
+    var sigs: [float; 5] = [1.0, 2.0, 3.0, 4.0, 5.0];
+    var rets: [float; 5] = [0.01, 0.02, 0.03, 0.04, 0.05];
+    let ic: float = factor_information_coefficient(&sigs[0], &rets[0], 5);
+    if (ic < 0.99 || ic > 1.01) {
+        return 1;
+    }
+
+    var ou_series: [float; 8] = [10.0, 9.0, 8.2, 7.5, 7.0, 6.6, 6.3, 6.1];
+    let hl: float = factor_ornstein_uhlenbeck_halflife(&ou_series[0], 8);
+    if (hl <= 0.0 || hl > 20.0) {
+        return 2;
+    }
+    return 0;
+}

@@ -1,0 +1,133 @@
+c_code {
+static void port_c_inv_vol(const float* vols, int n, float* out_w) {
+    if (!vols || !out_w || n <= 0) return;
+    double inv_sum = 0.0;
+    for (int i = 0; i < n; i = i + 1) {
+        if (vols[i] > 1e-7) inv_sum = inv_sum + (1.0 / vols[i]);
+    }
+    for (int i = 0; i < n; i = i + 1) {
+        if (vols[i] > 1e-7 && inv_sum > 1e-9) {
+            out_w[i] = (float)((1.0 / vols[i]) / inv_sum);
+        } else {
+            out_w[i] = 0.0;
+        }
+    }
+}
+}
+
+fn port_normalize_weights(w: *float, count: int) -> int {
+    var ok: int = 0;
+    c_code {
+        if (w && count > 0) {
+            double sum = 0.0;
+            for (int i = 0; i < count; i = i + 1) sum = sum + w[i];
+            if (fabs(sum) > 1e-9) {
+                for (int i = 0; i < count; i = i + 1) w[i] = (float)(w[i] / sum);
+                ok = 1;
+            }
+        }
+    }
+    return ok;
+}
+
+fn port_min_variance_2asset(vol1: float, vol2: float, corr: float, out_w1: *float, out_w2: *float) -> int {
+    var ok: int = 0;
+    c_code {
+        double v1_sq = vol1 * vol1;
+        double v2_sq = vol2 * vol2;
+        double cov12 = corr * vol1 * vol2;
+        double denom = v1_sq + v2_sq - 2.0 * cov12;
+        if (fabs(denom) > 1e-9) {
+            double w1 = (v2_sq - cov12) / denom;
+            if (out_w1) *out_w1 = (float)w1;
+            if (out_w2) *out_w2 = (float)(1.0 - w1);
+            ok = 1;
+        }
+    }
+    return ok;
+}
+
+fn port_tangency_2asset(r1: float, r2: float, vol1: float, vol2: float, corr: float, rf: float, out_w1: *float, out_w2: *float) -> int {
+    var ok: int = 0;
+    c_code {
+        double er1 = r1 - rf;
+        double er2 = r2 - rf;
+        double v1_sq = vol1 * vol1;
+        double v2_sq = vol2 * vol2;
+        double cov12 = corr * vol1 * vol2;
+        double det = v1_sq * v2_sq - cov12 * cov12;
+        if (fabs(det) > 1e-9) {
+            double z1 = (v2_sq * er1 - cov12 * er2) / det;
+            double z2 = (v1_sq * er2 - cov12 * er1) / det;
+            double z_sum = z1 + z2;
+            if (fabs(z_sum) > 1e-9) {
+                if (out_w1) *out_w1 = (float)(z1 / z_sum);
+                if (out_w2) *out_w2 = (float)(z2 / z_sum);
+                ok = 1;
+            }
+        }
+    }
+    return ok;
+}
+
+fn port_risk_parity_weights(vols: *float, count: int, out_weights: *float) -> int {
+    var ok: int = 0;
+    c_code {
+        if (vols && out_weights && count > 0) {
+            port_c_inv_vol(vols, count, out_weights);
+            ok = 1;
+        }
+    }
+    return ok;
+}
+
+fn port_calc_return(weights: *float, returns: *float, count: int) -> float {
+    var r: float = 0.0;
+    c_code {
+        if (weights && returns && count > 0) {
+            double sum = 0.0;
+            for (int i = 0; i < count; i = i + 1) {
+                sum = sum + weights[i] * returns[i];
+            }
+            r = (float)sum;
+        }
+    }
+    return r;
+}
+
+fn port_calc_variance(weights: *float, cov_flat: *float, count: int) -> float {
+    var var_val: float = 0.0;
+    c_code {
+        if (weights && cov_flat && count > 0) {
+            double total = 0.0;
+            for (int i = 0; i < count; i = i + 1) {
+                double row_sum = 0.0;
+                for (int j = 0; j < count; j = j + 1) {
+                    row_sum = row_sum + cov_flat[i * count + j] * weights[j];
+                }
+                total = total + weights[i] * row_sum;
+            }
+            var_val = (float)total;
+        }
+    }
+    return var_val;
+}
+
+fn port_rebalance_shares(curr_shares: *int, prices: *float, target_weights: *float, total_capital: float, count: int, out_trade_shares: *int) -> int {
+    var ok: int = 0;
+    c_code {
+        if (curr_shares && prices && target_weights && out_trade_shares && count > 0) {
+            for (int i = 0; i < count; i = i + 1) {
+                if (prices[i] > 1e-5) {
+                    double target_val = total_capital * target_weights[i];
+                    int target_sh = (int)(target_val / prices[i]);
+                    out_trade_shares[i] = target_sh - curr_shares[i];
+                } else {
+                    out_trade_shares[i] = 0;
+                }
+            }
+            ok = 1;
+        }
+    }
+    return ok;
+}

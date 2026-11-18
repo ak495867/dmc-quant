@@ -1,0 +1,90 @@
+fn matrix_cholesky_2x2(a00: float, a01: float, a11: float, out_l00: *float, out_l10: *float, out_l11: *float) -> int {
+    var ok: int = 0;
+    c_code {
+        if (a00 > 1e-9) {
+            double l00 = sqrt(a00);
+            double l10 = a01 / l00;
+            double rem = a11 - l10 * l10;
+            if (rem > -1e-9) {
+                if (rem < 0.0) rem = 0.0;
+                double l11 = sqrt(rem);
+                if (out_l00) *out_l00 = (float)l00;
+                if (out_l10) *out_l10 = (float)l10;
+                if (out_l11) *out_l11 = (float)l11;
+                ok = 1;
+            }
+        }
+    }
+    return ok;
+}
+
+fn matrix_cholesky_3x3(cov: *float, out_l: *float) -> int {
+    var ok: int = 0;
+    c_code {
+        if (cov && out_l) {
+            for (int k = 0; k < 9; k = k + 1) out_l[k] = 0.0;
+            double a00 = cov[0];
+            if (a00 > 1e-9) {
+                double l00 = sqrt(a00);
+                double l10 = cov[3] / l00;
+                double l20 = cov[6] / l00;
+                double rem11 = cov[4] - l10 * l10;
+                if (rem11 > 1e-9) {
+                    double l11 = sqrt(rem11);
+                    double l21 = (cov[7] - l20 * l10) / l11;
+                    double rem22 = cov[8] - l20 * l20 - l21 * l21;
+                    if (rem22 > -1e-9) {
+                        if (rem22 < 0.0) rem22 = 0.0;
+                        double l22 = sqrt(rem22);
+                        out_l[0] = (float)l00;
+                        out_l[3] = (float)l10;
+                        out_l[4] = (float)l11;
+                        out_l[6] = (float)l20;
+                        out_l[7] = (float)l21;
+                        out_l[8] = (float)l22;
+                        ok = 1;
+                    }
+                }
+            }
+        }
+    }
+    return ok;
+}
+
+fn matrix_invert_2x2(a00: float, a01: float, a10: float, a11: float, out_inv: *float) -> int {
+    var ok: int = 0;
+    c_code {
+        double det = a00 * a11 - a01 * a10;
+        if (fabs(det) > 1e-9 && out_inv) {
+            double inv_det = 1.0 / det;
+            out_inv[0] = (float)(a11 * inv_det);
+            out_inv[1] = (float)(-a01 * inv_det);
+            out_inv[2] = (float)(-a10 * inv_det);
+            out_inv[3] = (float)(a00 * inv_det);
+            ok = 1;
+        }
+    }
+    return ok;
+}
+
+fn matrix_vector_mul_3x3(mat: *float, vec: *float, out_res: *float) -> int {
+    var ok: int = 0;
+    c_code {
+        if (mat && vec && out_res) {
+            for (int r = 0; r < 3; r = r + 1) {
+                double s = 0.0;
+                for (int c = 0; c < 3; c = c + 1) {
+                    s = s + mat[r * 3 + c] * vec[c];
+                }
+                out_res[r] = (float)s;
+            }
+            ok = 1;
+        }
+    }
+    return ok;
+}
+
+fn simd_vector_dot8(v1: f32x8, v2: f32x8) -> float {
+    let prod: f32x8 = v1 * v2;
+    return f32x8_sum(prod);
+}

@@ -1,0 +1,78 @@
+import "../src/portfolio";
+
+#[test]
+fn test_portfolio_weights_and_allocation() -> int {
+    var w: [float; 3] = [2.0, 3.0, 5.0];
+    let ok1: int = port_normalize_weights(&w[0], 3);
+    if (ok1 != 1) {
+        return 1;
+    }
+    if (w[0] < 0.19 || w[0] > 0.21 || w[1] < 0.29 || w[1] > 0.31 || w[2] < 0.49 || w[2] > 0.51) {
+        return 2;
+    }
+
+    var vols: [float; 2] = [0.10, 0.20];
+    var rp_w: [float; 2] = [0.0, 0.0];
+    let ok2: int = port_risk_parity_weights(&vols[0], 2, &rp_w[0]);
+    if (ok2 != 1) {
+        return 3;
+    }
+    if (rp_w[0] < 0.65 || rp_w[0] > 0.68 || rp_w[1] < 0.32 || rp_w[1] > 0.35) {
+        return 4;
+    }
+    return 0;
+}
+
+#[test]
+fn test_min_variance_and_tangency() -> int {
+    var w1: float = 0.0;
+    var w2: float = 0.0;
+    let ok_mv: int = port_min_variance_2asset(0.20, 0.30, 0.0, &w1, &w2);
+    if (ok_mv != 1) {
+        return 1;
+    }
+    if (w1 < 0.68 || w1 > 0.71 || w2 < 0.29 || w2 > 0.32) {
+        return 2;
+    }
+
+    var tw1: float = 0.0;
+    var tw2: float = 0.0;
+    let ok_tan: int = port_tangency_2asset(0.10, 0.15, 0.20, 0.30, 0.0, 0.02, &tw1, &tw2);
+    if (ok_tan != 1) {
+        return 3;
+    }
+    if (tw1 < 0.57 || tw1 > 0.59 || tw2 < 0.41 || tw2 > 0.43) {
+        return 4;
+    }
+    return 0;
+}
+
+#[test]
+fn test_portfolio_metrics_and_rebalance() -> int {
+    var weights: [float; 2] = [0.6, 0.4];
+    var rets: [float; 2] = [0.10, 0.20];
+    let pret: float = port_calc_return(&weights[0], &rets[0], 2);
+    if (pret < 0.139 || pret > 0.141) {
+        return 1;
+    }
+
+    var cov: [float; 4] = [0.04, 0.0, 0.0, 0.04];
+    var w_equal: [float; 2] = [0.5, 0.5];
+    let pvar: float = port_calc_variance(&w_equal[0], &cov[0], 2);
+    if (pvar < 0.019 || pvar > 0.021) {
+        return 2;
+    }
+
+    var curr_sh: [int; 2] = [400, 1000];
+    var prices: [float; 2] = [100.0, 50.0];
+    var target_w: [float; 2] = [0.6, 0.4];
+    var trades: [int; 2] = [0, 0];
+    let ok_reb: int = port_rebalance_shares(&curr_sh[0], &prices[0], &target_w[0], 100000.0, 2, &trades[0]);
+    if (ok_reb != 1) {
+        return 3;
+    }
+    if (trades[0] != 200 || trades[1] != -200) {
+        return 4;
+    }
+    return 0;
+}

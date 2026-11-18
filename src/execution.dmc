@@ -1,0 +1,62 @@
+fn exec_twap_slice(total_qty: int, num_slices: int, slice_idx: int) -> int {
+    if (num_slices <= 0 || slice_idx < 0 || slice_idx >= num_slices) {
+        return 0;
+    }
+    let base_slice: int = total_qty / num_slices;
+    let remainder: int = total_qty % num_slices;
+    if (slice_idx < remainder) {
+        return base_slice + 1;
+    }
+    return base_slice;
+}
+
+fn exec_vwap_slice(total_qty: int, bucket_volume: int, total_projected_volume: int) -> int {
+    if (total_projected_volume <= 0 || bucket_volume <= 0) {
+        return 0;
+    }
+    var slice: int = 0;
+    c_code {
+        double ratio = (double)bucket_volume / (double)total_projected_volume;
+        slice = (int)(total_qty * ratio);
+    }
+    return slice;
+}
+
+fn exec_pov_slice(market_volume: int, target_participation_rate: float) -> int {
+    if (market_volume <= 0 || target_participation_rate <= 0.0 || target_participation_rate >= 1.0) {
+        return 0;
+    }
+    var slice: int = 0;
+    c_code {
+        double pov_ratio = target_participation_rate / (1.0 - target_participation_rate);
+        slice = (int)(market_volume * pov_ratio);
+    }
+    return slice;
+}
+
+fn exec_implementation_shortfall(decision_price: float, avg_execution_price: float, total_qty: int, side: int) -> float {
+    var is_val: float = 0.0;
+    c_code {
+        if (side == 1) {
+            is_val = (float)((avg_execution_price - decision_price) * total_qty);
+        } else if (side == 2) {
+            is_val = (float)((decision_price - avg_execution_price) * total_qty);
+        }
+    }
+    return is_val;
+}
+
+fn exec_slippage_bps(decision_price: float, avg_execution_price: float, side: int) -> float {
+    if (decision_price <= 0.0) {
+        return 0.0;
+    }
+    var bps: float = 0.0;
+    c_code {
+        if (side == 1) {
+            bps = (float)(((avg_execution_price - decision_price) / decision_price) * 10000.0);
+        } else if (side == 2) {
+            bps = (float)(((decision_price - avg_execution_price) / decision_price) * 10000.0);
+        }
+    }
+    return bps;
+}

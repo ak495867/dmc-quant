@@ -1,0 +1,112 @@
+c_code {
+static int factor_cmp_flt(const void* a, const void* b) {
+    float fa = *(const float*)a;
+    float fb = *(const float*)b;
+    if (fa < fb) return -1;
+    if (fa > fb) return 1;
+    return 0;
+}
+}
+
+fn factor_zscore(vals: *float, count: int, out_zscores: *float) -> int {
+    var ok: int = 0;
+    c_code {
+        if (vals && out_zscores && count > 1) {
+            double sum = 0.0;
+            for (int i = 0; i < count; i = i + 1) sum = sum + vals[i];
+            double mean = sum / count;
+            double sum_sq = 0.0;
+            for (int i = 0; i < count; i = i + 1) {
+                double diff = vals[i] - mean;
+                sum_sq = sum_sq + diff * diff;
+            }
+            double std_dev = sqrt(sum_sq / (count - 1));
+            if (std_dev > 1e-9) {
+                for (int i = 0; i < count; i = i + 1) {
+                    out_zscores[i] = (float)((vals[i] - mean) / std_dev);
+                }
+                ok = 1;
+            }
+        }
+    }
+    return ok;
+}
+
+fn factor_winsorize(vals: *float, count: int, lower_pct: float, upper_pct: float, out_vals: *float) -> int {
+    var ok: int = 0;
+    c_code {
+        if (vals && out_vals && count > 0) {
+            float* sorted = (float*)malloc(count * sizeof(float));
+            for (int i = 0; i < count; i = i + 1) sorted[i] = vals[i];
+            qsort(sorted, count, sizeof(float), factor_cmp_flt);
+            int low_idx = (int)(lower_pct * count);
+            int high_idx = (int)(upper_pct * count);
+            if (low_idx < 0) low_idx = 0;
+            if (high_idx >= count) high_idx = count - 1;
+            float low_val = sorted[low_idx];
+            float high_val = sorted[high_idx];
+            for (int i = 0; i < count; i = i + 1) {
+                if (vals[i] < low_val) out_vals[i] = low_val;
+                else if (vals[i] > high_val) out_vals[i] = high_val;
+                else out_vals[i] = vals[i];
+            }
+            free(sorted);
+            ok = 1;
+        }
+    }
+    return ok;
+}
+
+fn factor_ornstein_uhlenbeck_halflife(series: *float, count: int) -> float {
+    var halflife: float = 0.0;
+    c_code {
+        if (series && count > 2) {
+            double sum_x = 0.0, sum_y = 0.0, sum_xx = 0.0, sum_xy = 0.0;
+            int n = count - 1;
+            for (int i = 0; i < n; i = i + 1) {
+                double x = series[i];
+                double y = series[i + 1] - series[i];
+                sum_x = sum_x + x;
+                sum_y = sum_y + y;
+                sum_xx = sum_xx + x * x;
+                sum_xy = sum_xy + x * y;
+            }
+            double denom = (n * sum_xx - sum_x * sum_x);
+            if (fabs(denom) > 1e-9) {
+                double lambda = (n * sum_xy - sum_x * sum_y) / denom;
+                if (lambda < -1e-7) {
+                    halflife = (float)(-log(2.0) / lambda);
+                }
+            }
+        }
+    }
+    return halflife;
+}
+
+fn factor_information_coefficient(signals: *float, fwd_returns: *float, count: int) -> float {
+    var ic: float = 0.0;
+    c_code {
+        if (signals && fwd_returns && count > 1) {
+            double ss = 0.0, sr = 0.0;
+            for (int i = 0; i < count; i = i + 1) {
+                ss = ss + signals[i];
+                sr = sr + fwd_returns[i];
+            }
+            double ms = ss / count;
+            double mr = sr / count;
+            double num = 0.0, vars = 0.0, varr = 0.0;
+            for (int i = 0; i < count; i = i + 1) {
+                double ds = signals[i] - ms;
+                double dr = fwd_returns[i] - mr;
+                num = num + ds * dr;
+                vars = vars + ds * ds;
+                varr = varr + dr * dr;
+            }
+            double denom = sqrt(vars * varr);
+            if (denom > 1e-9) {
+                ic = (float)(num / denom);
+            }
+        }
+    }
+    return ic;
+}

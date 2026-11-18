@@ -1,0 +1,57 @@
+import "../src/simd_matrix";
+
+#[test]
+fn test_cholesky_and_inverse() -> int {
+    var l00: float = 0.0;
+    var l10: float = 0.0;
+    var l11: float = 0.0;
+    let ok_c2: int = matrix_cholesky_2x2(4.0, 2.0, 5.0, &l00, &l10, &l11);
+    if (ok_c2 != 1) {
+        return 1;
+    }
+    if (l00 < 1.99 || l00 > 2.01 || l10 < 0.99 || l10 > 1.01 || l11 < 1.99 || l11 > 2.01) {
+        return 2;
+    }
+
+    var cov3: [float; 9] = [4.0, 0.0, 0.0, 0.0, 9.0, 0.0, 0.0, 0.0, 16.0];
+    var l3: [float; 9] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    let ok_c3: int = matrix_cholesky_3x3(&cov3[0], &l3[0]);
+    if (ok_c3 != 1) {
+        return 3;
+    }
+    if (l3[0] < 1.99 || l3[0] > 2.01 || l3[4] < 2.99 || l3[4] > 3.01 || l3[8] < 3.99 || l3[8] > 4.01) {
+        return 4;
+    }
+
+    var inv: [float; 4] = [0.0, 0.0, 0.0, 0.0];
+    let ok_inv: int = matrix_invert_2x2(4.0, 7.0, 2.0, 6.0, &inv[0]);
+    if (ok_inv != 1) {
+        return 5;
+    }
+    if (inv[0] < 0.59 || inv[0] > 0.61 || inv[1] < -0.71 || inv[1] > -0.69) {
+        return 6;
+    }
+    return 0;
+}
+
+#[test]
+fn test_matmul_and_simd_dot() -> int {
+    var mat: [float; 9] = [1.0, 2.0, 3.0, 0.0, 1.0, 4.0, 5.0, 6.0, 0.0];
+    var vec: [float; 3] = [1.0, 1.0, 1.0];
+    var out_v: [float; 3] = [0.0, 0.0, 0.0];
+    let ok_mul: int = matrix_vector_mul_3x3(&mat[0], &vec[0], &out_v[0]);
+    if (ok_mul != 1) {
+        return 1;
+    }
+    if (out_v[0] < 5.99 || out_v[0] > 6.01 || out_v[1] < 4.99 || out_v[1] > 5.01 || out_v[2] < 10.99 || out_v[2] > 11.01) {
+        return 2;
+    }
+
+    let va: f32x8 = f32x8(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0);
+    let vb: f32x8 = f32x8(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
+    let dot: float = simd_vector_dot8(va, vb);
+    if (dot < 35.9 || dot > 36.1) {
+        return 3;
+    }
+    return 0;
+}
