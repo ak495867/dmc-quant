@@ -1,0 +1,77 @@
+name: Quant CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    name: Test & Benchmark (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            shell: bash
+            shared_ext: so
+          - os: windows-latest
+            shell: pwsh
+            shared_ext: dll
+          - os: macos-latest
+            shell: bash
+            shared_ext: dylib
+
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+
+    steps:
+      - name: Checkout dmc-quant
+        uses: actions/checkout@v4
+
+      - name: Checkout Demonic C Compiler
+        uses: actions/checkout@v4
+        with:
+          repository: ak495867/Demonic-C
+          path: demonic-c
+
+      - name: Build DMC Compiler (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd demonic-c
+          mkdir -p bin
+          g++ -std=c++20 -O3 compiler/dmc.cpp -o bin/dmc
+          chmod +x bin/dmc
+          echo "$(pwd)/bin" >> $GITHUB_PATH
+
+      - name: Build DMC Compiler (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd demonic-c
+          if (!(Test-Path bin)) { New-Item -ItemType Directory -Force -Path bin }
+          clang++ -std=c++20 -O3 compiler/dmc.cpp -o bin/dmc.exe
+          $binPath = (Resolve-Path bin).Path
+          Add-Content $env:GITHUB_PATH $binPath
+
+      - name: Run Quant Unit Test Suite
+        run: dmc test tests
+
+      - name: Run Quant Micro-Benchmark Suite
+        run: dmc bench benchmarks
+
+      - name: Run Interactive Quant Desk Demo
+        run: dmc run examples/quant_desk_demo.dmc
+
+      - name: Build Dynamic Shared Library
+        run: dmc build src/dmc_quant.dmc --shared -o lib/dmc_quant.${{ matrix.shared_ext }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run Python C-Interop Tests
+        run: python examples/test_python_bindings.py
