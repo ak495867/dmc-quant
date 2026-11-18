@@ -9,3 +9,6 @@ lib/
 dmc.lock
 packages/
 _test_tmp_*
+
+__pycache__/
+*.pyc
